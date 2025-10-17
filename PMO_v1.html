@@ -1,0 +1,1252 @@
+<!DOCTYPE html>
+<html lang="hr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upravljačka ploča za projekte</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Gantt Chart Library -->
+    <script src="https://cdn.jsdelivr.net/npm/frappe-gantt@0.6.1/dist/frappe-gantt.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/frappe-gantt@0.6.1/dist/frappe-gantt.css">
+    <!-- SheetJS for Excel export -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .task-card {
+            transition: transform 0.2s, box-shadow 0.2s, background-color 0.3s;
+            cursor: grab;
+        }
+        .task-card:active {
+            cursor: grabbing;
+        }
+        .dragging {
+            opacity: 0.5;
+            transform: rotate(2deg);
+        }
+        .drag-over {
+            border-style: dashed;
+            border-color: #4f46e5;
+            background-color: rgba(79, 70, 229, 0.05);
+        }
+        /* Scrollbar styling */
+        .kanban-column-body::-webkit-scrollbar {
+            width: 8px;
+        }
+        .kanban-column-body::-webkit-scrollbar-track {
+            background: #f1f5f9;
+            border-radius: 10px;
+        }
+        .kanban-column-body::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 10px;
+        }
+        .kanban-column-body::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+
+        /* Frappe Gantt Customizations - Updated Colors */
+        /* Some builds set custom_class on the .bar element, not wrapper; cover both and force override */
+        #gantt-chart .gantt .bar-wrapper.progress-100 .bar,
+        #gantt-chart .gantt .bar.progress-100,
+        #gantt-chart .gantt .bar-wrapper.progress-100 .bar-progress,
+        #gantt-chart .gantt .bar-progress.progress-100,
+        #gantt-chart .gantt .bar-wrapper.progress-100 .bar-progress { fill: #a7f3d0 !important; stroke: #a7f3d0 !important; /* pastel-green (Gotovo) */ }
+        #gantt-chart .gantt .bar-wrapper.progress-50 .bar,
+        #gantt-chart .gantt .bar.progress-50,
+        #gantt-chart .gantt .bar-wrapper.progress-50 .bar-progress,
+        #gantt-chart .gantt .bar-progress.progress-50,
+        #gantt-chart .gantt .bar-wrapper.progress-50 .bar-progress { fill: #fef08a !important; stroke: #fef08a !important; /* pastel-yellow (U izradi) */ }
+        #gantt-chart .gantt .bar-wrapper.progress-0 .bar,
+        #gantt-chart .gantt .bar.progress-0,
+        #gantt-chart .gantt .bar-wrapper.progress-0 .bar-progress,
+        #gantt-chart .gantt .bar-progress.progress-0,
+        #gantt-chart .gantt .bar-wrapper.progress-0 .bar-progress { fill: #e2e8f0 !important; stroke: #e2e8f0 !important; /* pastel-gray (Za obaviti) */ }
+        #gantt-chart .gantt .bar-label { font-size: 12px; font-weight: 500; fill: #334155; /* slate-700 for better contrast */ }
+        #gantt-chart .grid-header, #gantt-chart .grid-row { fill: #f8fafc; /* slate-50 */ }
+        #gantt-chart .grid-body .grid-row:nth-child(odd) { fill: #f1f5f9; /* slate-100 */ }
+        #gantt-chart .gantt-container { overflow: visible; }
+    </style>
+</head>
+<body class="bg-slate-100 text-slate-800">
+
+    <!-- Glavni spremnik -->
+    <div class="container mx-auto p-4 sm:p-6 lg:p-8">
+        
+        <!-- Zaglavlje -->
+        <header class="flex flex-col sm:flex-row justify-between items-start mb-8 gap-4">
+            <div>
+                <h1 class="text-3xl font-bold text-slate-700">Upravljačka ploča</h1>
+                <div class="flex items-center flex-wrap gap-2 mt-2">
+                    <select id="projectSelector" class="bg-white border border-slate-300 rounded-md text-sm shadow-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 p-2"></select>
+                    <button id="newProjectBtn" class="bg-slate-500 text-white font-semibold py-2 px-3 rounded-lg shadow-md hover:bg-slate-600 transition duration-300 flex items-center text-sm">
+                        <i class="fas fa-folder-plus mr-2"></i> Novi
+                    </button>
+                    <button id="renameProjectBtn" class="bg-blue-500 text-white font-semibold py-2 px-3 rounded-lg shadow-md hover:bg-blue-600 transition duration-300 flex items-center text-sm">
+                        <i class="fas fa-edit mr-2"></i> Preimenuj
+                    </button>
+                    <button id="deleteProjectBtn" class="bg-red-600 text-white font-semibold py-2 px-3 rounded-lg shadow-md hover:bg-red-700 transition duration-300 flex items-center text-sm">
+                        <i class="fas fa-trash mr-2"></i> Obriši
+                    </button>
+                    <button id="exportExcelBtn" class="bg-green-600 text-white font-semibold py-2 px-3 rounded-lg shadow-md hover:bg-green-700 transition duration-300 flex items-center text-sm" title="Izvezi u Excel">
+                        <i class="fas fa-file-excel mr-2"></i> Izvezi
+                    </button>
+                </div>
+            </div>
+            <button id="addTaskBtn" class="bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-indigo-700 transition duration-300 flex items-center self-end sm:self-center">
+                <i class="fas fa-plus mr-2"></i> Dodaj novi zadatak
+            </button>
+        </header>
+
+        <!-- View switcher -->
+        <div class="mb-6">
+            <div class="border-b border-slate-300">
+                <nav class="-mb-px flex space-x-6" aria-label="Tabs">
+                    <button id="kanbanTab" class="view-tab whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm border-indigo-500 text-indigo-600" aria-current="page">
+                        <i class="fas fa-grip-vertical mr-2"></i>Kanban
+                    </button>
+                    <button id="listTab" class="view-tab whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300">
+                        <i class="fas fa-list-ul mr-2"></i>Lista
+                    </button>
+                    <button id="timelineTab" class="view-tab whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300">
+                        <i class="fas fa-chart-gantt mr-2"></i>Timeline
+                    </button>
+                    <button id="workloadTab" class="view-tab whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300">
+                        <i class="fas fa-users mr-2"></i>Workload
+                    </button>
+                    <button id="calendarTab" class="view-tab whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300">
+                        <i class="fas fa-calendar-days mr-2"></i>Kalendar
+                    </button>
+                </nav>
+            </div>
+        </div>
+
+        <!-- Views Container -->
+        <div id="views">
+            <!-- Kanban View -->
+            <div id="kanban-view">
+                <div id="kanban-board" class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div id="todo" class="bg-slate-200 rounded-xl p-4 flex flex-col h-full">
+                        <h2 class="text-xl font-semibold mb-4 text-slate-600 flex items-center"><i class="fas fa-list-check mr-3 text-red-500"></i>Za obaviti</h2>
+                        <div data-status="todo" class="kanban-column-body min-h-[200px] flex-grow p-2 -m-2 space-y-4 overflow-y-auto" style="max-height: 70vh;"></div>
+                        <button class="column-add-btn mt-3 self-end bg-indigo-600 text-white text-sm font-semibold py-2 px-3 rounded-md shadow hover:bg-indigo-700" data-status="todo">Dodaj</button>
+                    </div>
+                    <div id="inprogress" class="bg-slate-200 rounded-xl p-4 flex flex-col h-full">
+                        <h2 class="text-xl font-semibold mb-4 text-slate-600 flex items-center"><i class="fas fa-person-digging mr-3 text-yellow-500"></i>U izradi</h2>
+                        <div data-status="inprogress" class="kanban-column-body min-h-[200px] flex-grow p-2 -m-2 space-y-4 overflow-y-auto" style="max-height: 70vh;"></div>
+                        <button class="column-add-btn mt-3 self-end bg-indigo-600 text-white text-sm font-semibold py-2 px-3 rounded-md shadow hover:bg-indigo-700" data-status="inprogress">Dodaj</button>
+                    </div>
+                    <div id="done" class="bg-slate-200 rounded-xl p-4 flex flex-col h-full">
+                        <h2 class="text-xl font-semibold mb-4 text-slate-600 flex items-center"><i class="fas fa-check-double mr-3 text-green-500"></i>Gotovo</h2>
+                        <div data-status="done" class="kanban-column-body min-h-[200px] flex-grow p-2 -m-2 space-y-4 overflow-y-auto" style="max-height: 70vh;"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- List View -->
+            <div id="list-view" class="hidden bg-white p-4 rounded-xl shadow">
+                 <h2 class="text-xl font-semibold mb-4 text-slate-700">Lista Zadataka</h2>
+                <div id="task-list-container">
+                    <!-- Task list will be generated here -->
+                </div>
+            </div>
+
+            <!-- Timeline View -->
+            <div id="timeline-view" class="hidden bg-white p-4 rounded-xl shadow">
+                <h2 class="text-xl font-semibold mb-4 text-slate-700">Timeline Projekta</h2>
+                <div id="gantt-chart-container">
+                     <svg id="gantt-chart"></svg>
+                </div>
+            </div>
+
+            <!-- Workload View -->
+            <div id="workload-view" class="hidden bg-white p-4 rounded-xl shadow">
+                <div class="flex flex-col sm:flex-row justify-between items-start mb-4 gap-4">
+                    <h2 class="text-xl font-semibold text-slate-700">Opterećenje članova tima</h2>
+                    <!-- Search component -->
+                    <div class="relative w-full sm:w-64 workload-search-container">
+                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <i class="fas fa-search text-slate-400"></i>
+                        </div>
+                        <input type="text" id="workloadSearch" placeholder="Pretraži članove..." class="block w-full pl-10 pr-3 py-2 bg-white border border-slate-300 rounded-md text-sm shadow-sm placeholder-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+                        <div id="workloadSearchDropdown" class="hidden absolute z-10 mt-1 w-full bg-white rounded-md shadow-lg border border-slate-200 max-h-60 overflow-y-auto">
+                            <!-- Dropdown items will be generated here -->
+                        </div>
+                    </div>
+                </div>
+                <div id="workload-container" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <!-- Workload cards will be generated here -->
+                </div>
+            </div>
+
+            <!-- Calendar View -->
+            <div id="calendar-view" class="hidden bg-white p-4 rounded-xl shadow">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-xl font-semibold text-slate-700 flex items-center"><i class="fas fa-calendar-days mr-2"></i>Mjesečni kalendar</h2>
+                    <div class="flex items-center gap-2">
+                        <button id="prevMonthBtn" class="text-slate-600 hover:text-indigo-600 px-3 py-1 rounded-md border border-slate-300 text-sm"><i class="fas fa-chevron-left"></i></button>
+                        <span id="calendarMonthLabel" class="text-slate-800 font-semibold"></span>
+                        <button id="nextMonthBtn" class="text-slate-600 hover:text-indigo-600 px-3 py-1 rounded-md border border-slate-300 text-sm"><i class="fas fa-chevron-right"></i></button>
+                    </div>
+                </div>
+                <div id="calendar-grid" class="grid grid-cols-7 gap-2"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal za dodavanje/uređivanje zadatka (ista struktura kao prije) -->
+    <div id="taskModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50 p-4">
+        <div id="modal-content" class="bg-white rounded-lg shadow-2xl w-full max-w-lg p-8 transform transition-all duration-300 scale-95 opacity-0">
+            <h3 id="modalTitle" class="text-2xl font-bold mb-6">Novi zadatak</h3>
+            <form id="taskForm">
+                <input type="hidden" id="taskId">
+                <input type="hidden" id="taskStatusPreset">
+                <div class="mb-4">
+                    <label for="taskTitle" class="block text-sm font-medium text-slate-600">Naziv zadatka</label>
+                    <input type="text" id="taskTitle" class="mt-1 block w-full px-3 py-2 bg-white border border-slate-300 rounded-md text-sm shadow-sm placeholder-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500" required>
+                </div>
+                <div class="mb-4 hidden" id="taskProjectSelectWrapper">
+                    <label for="taskProjectSelect" class="block text-sm font-medium text-slate-600">Projekt</label>
+                    <select id="taskProjectSelect" class="mt-1 block w-full px-3 py-2 bg-white border border-slate-300 rounded-md text-sm shadow-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"></select>
+                </div>
+                <div class="mb-4">
+                    <label for="taskDescription" class="block text-sm font-medium text-slate-600">Opis</label>
+                    <textarea id="taskDescription" rows="4" class="mt-1 block w-full px-3 py-2 bg-white border border-slate-300 rounded-md text-sm shadow-sm placeholder-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"></textarea>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                    <div>
+                        <label for="taskAssignee" class="block text-sm font-medium text-slate-600">Zadužena osoba</label>
+                        <input type="text" id="taskAssignee" class="mt-1 block w-full px-3 py-2 bg-white border border-slate-300 rounded-md text-sm shadow-sm placeholder-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500" required>
+                    </div>
+                     <div>
+                        <label for="taskPriority" class="block text-sm font-medium text-slate-600">Prioritet</label>
+                        <select id="taskPriority" class="mt-1 block w-full px-3 py-2 bg-white border border-slate-300 rounded-md text-sm shadow-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+                            <option value="low">Nizak</option>
+                            <option value="medium" selected>Srednji</option>
+                            <option value="high">Visok</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+                    <div>
+                        <label for="taskStartDate" class="block text-sm font-medium text-slate-600">Datum početka</label>
+                        <input type="date" id="taskStartDate" class="mt-1 block w-full px-3 py-2 bg-white border border-slate-300 rounded-md text-sm shadow-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500" required>
+                    </div>
+                    <div>
+                        <label for="taskEndDate" class="block text-sm font-medium text-slate-600">Očekivani završetak</label>
+                        <input type="date" id="taskEndDate" class="mt-1 block w-full px-3 py-2 bg-white border border-slate-300 rounded-md text-sm shadow-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500" required>
+                    </div>
+                </div>
+                <div class="flex justify-end space-x-4">
+                    <button type="button" id="cancelBtn" class="bg-slate-200 text-slate-700 font-semibold py-2 px-4 rounded-lg hover:bg-slate-300 transition">Odustani</button>
+                    <button type="submit" class="bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-indigo-700 transition">Spremi zadatak</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Modali za projekt i potvrdu (ista struktura kao prije) -->
+    <div id="projectModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50 p-4">
+        <div id="project-modal-content" class="bg-white rounded-lg shadow-2xl w-full max-w-sm p-8 transform transition-all duration-300 scale-95 opacity-0">
+            <h3 id="projectModalTitle" class="text-2xl font-bold mb-6">Novi Projekt</h3>
+            <form id="projectForm">
+                <input type="hidden" id="projectId">
+                <div class="mb-4">
+                    <label for="projectName" class="block text-sm font-medium text-slate-600">Naziv projekta</label>
+                    <input type="text" id="projectName" class="mt-1 block w-full px-3 py-2 bg-white border border-slate-300 rounded-md text-sm shadow-sm placeholder-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500" required>
+                </div>
+                <div class="flex justify-end space-x-4">
+                    <button type="button" id="cancelProjectBtn" class="bg-slate-200 text-slate-700 font-semibold py-2 px-4 rounded-lg hover:bg-slate-300 transition">Odustani</button>
+                    <button type="submit" id="submitProjectBtn" class="bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-indigo-700 transition">Kreiraj</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    <div id="confirmModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50 p-4">
+        <div id="confirm-modal-content" class="bg-white rounded-lg shadow-2xl w-full max-w-sm p-8 transform transition-all duration-300 scale-95 opacity-0">
+            <h3 id="confirmTitle" class="text-xl font-bold mb-4">Potvrda akcije</h3>
+            <p id="confirmMessage" class="text-slate-600 mb-6">Jeste li sigurni?</p>
+            <div class="flex justify-end space-x-4">
+                <button type="button" id="cancelConfirmBtn" class="bg-slate-200 text-slate-700 font-semibold py-2 px-4 rounded-lg hover:bg-slate-300 transition">Odustani</button>
+                <button type="button" id="confirmActionBtn" class="bg-red-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-red-700 transition">Potvrdi</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // --- DOM Elementi ---
+            const addTaskBtn = document.getElementById('addTaskBtn');
+            const newProjectBtn = document.getElementById('newProjectBtn');
+            const renameProjectBtn = document.getElementById('renameProjectBtn');
+            const deleteProjectBtn = document.getElementById('deleteProjectBtn');
+            const projectSelector = document.getElementById('projectSelector');
+            const kanbanColumns = document.querySelectorAll('.kanban-column-body');
+            const taskModal = document.getElementById('taskModal');
+            const taskModalContent = document.getElementById('modal-content');
+            const cancelBtn = document.getElementById('cancelBtn');
+            const taskForm = document.getElementById('taskForm');
+            const modalTitle = document.getElementById('modalTitle');
+            const projectModal = document.getElementById('projectModal');
+            const projectModalContent = document.getElementById('project-modal-content');
+            const projectModalTitle = document.getElementById('projectModalTitle');
+            const cancelProjectBtn = document.getElementById('cancelProjectBtn');
+            const projectForm = document.getElementById('projectForm');
+            const submitProjectBtn = document.getElementById('submitProjectBtn');
+            const confirmModal = document.getElementById('confirmModal');
+            const confirmModalContent = document.getElementById('confirm-modal-content');
+            const confirmTitle = document.getElementById('confirmTitle');
+            const confirmMessage = document.getElementById('confirmMessage');
+            const cancelConfirmBtn = document.getElementById('cancelConfirmBtn');
+            const confirmActionBtn = document.getElementById('confirmActionBtn');
+            let confirmCallback = null;
+
+            // View Elements
+            const viewTabs = document.querySelectorAll('.view-tab');
+            const kanbanView = document.getElementById('kanban-view');
+            const listView = document.getElementById('list-view');
+            const timelineView = document.getElementById('timeline-view');
+            const workloadView = document.getElementById('workload-view');
+            const calendarView = document.getElementById('calendar-view');
+            let currentView = 'kanban';
+            let gantt;
+            let calendarState = { year: new Date().getFullYear(), month: new Date().getMonth() };
+
+            // --- Podaci ---
+            let data = JSON.parse(localStorage.getItem('pmoData')) || {
+                projects: [{ 
+                    id: 1, name: 'Početni projekt', 
+                    tasks: [
+                        { id: 1, title: 'Dizajnirati početnu stranicu', description: 'Napraviti wireframe i vizualni dizajn.', assignee: 'Ana Anić', startDate: '2025-10-20', endDate: '2025-10-25', status: 'todo', priority: 'high' },
+                        { id: 2, title: 'Postaviti bazu podataka', description: 'Inicijalna shema i postavljanje.', assignee: 'Ivan Ivić', startDate: '2025-10-22', endDate: '2025-10-28', status: 'todo', priority: 'medium' },
+                        { id: 3, title: 'Razvoj API-ja', description: 'CRUD operacije za korisnike.', assignee: 'Marko Markić', startDate: '2025-10-25', endDate: '2025-11-05', status: 'inprogress', priority: 'high' },
+                        { id: 4, title: 'Testiranje prijave', description: 'Automatizirani i ručni testovi.', assignee: 'Petra Petrić', startDate: '2025-11-01', endDate: '2025-11-07', status: 'inprogress', priority: 'medium' },
+                        { id: 5, title: 'Implementirati UI za dashboard', description: 'Povezati API s frontendom.', assignee: 'Ana Anić', startDate: '2025-10-26', endDate: '2025-11-10', status: 'todo', priority: 'medium'},
+                        { id: 6, title: 'Završno testiranje', description: 'End-to-end testiranje cijele aplikacije.', assignee: 'Petra Petrić', startDate: '2025-11-10', endDate: '2025-11-15', status: 'todo', priority: 'low' },
+                        { id: 7, title: 'Priprema dokumentacije', description: 'Korisnička i tehnička dokumentacija.', assignee: 'Ivan Ivić', startDate: '2025-10-10', endDate: '2025-10-18', status: 'done', priority: 'low' }
+                    ] 
+                }],
+                currentProjectId: 1
+            };
+            
+            // --- Glavne funkcije ---
+            const saveData = () => { localStorage.setItem('pmoData', JSON.stringify(data)); };
+            const getCurrentProject = () => data.projects.find(p => p.id == data.currentProjectId);
+
+            // --- Funkcije za prikaz ---
+            const renderCurrentView = () => {
+                const project = getCurrentProject();
+                if (!project) {
+                    kanbanColumns.forEach(col => col.innerHTML = '<p class="text-center text-slate-500">Nema odabranog projekta.</p>');
+                    document.getElementById('task-list-container').innerHTML = '<p class="text-center text-slate-500">Nema odabranog projekta.</p>';
+                    document.getElementById('gantt-chart-container').innerHTML = '<p class="text-center text-slate-500">Nema odabranog projekta.</p>';
+                    document.getElementById('workload-container').innerHTML = '<p class="text-center text-slate-500">Nema odabranog projekta.</p>';
+                    return;
+                }
+
+                if (currentView === 'kanban') renderBoard();
+                else if (currentView === 'list') renderTaskList();
+                else if (currentView === 'timeline') renderTimeline();
+                else if (currentView === 'workload') renderWorkload();
+                else if (currentView === 'calendar') renderCalendar();
+            };
+
+            const switchView = (viewName) => {
+                currentView = viewName;
+                kanbanView.classList.toggle('hidden', viewName !== 'kanban');
+                listView.classList.toggle('hidden', viewName !== 'list');
+                timelineView.classList.toggle('hidden', viewName !== 'timeline');
+                workloadView.classList.toggle('hidden', viewName !== 'workload');
+                calendarView.classList.toggle('hidden', viewName !== 'calendar');
+                
+                viewTabs.forEach(tab => {
+                    const isCurrent = tab.id.startsWith(viewName);
+                    tab.classList.toggle('border-indigo-500', isCurrent);
+                    tab.classList.toggle('text-indigo-600', isCurrent);
+                    tab.classList.toggle('border-transparent', !isCurrent);
+                    tab.classList.toggle('text-slate-500', !isCurrent);
+                });
+                renderCurrentView();
+            };
+
+            // --- Funkcije za modal ---
+            const openModal = (modal, content) => {
+                modal.classList.remove('hidden');
+                modal.classList.add('flex');
+                setTimeout(() => { content.classList.remove('scale-95', 'opacity-0'); }, 10);
+            };
+            const closeModal = (modal, content) => {
+                content.classList.add('scale-95', 'opacity-0');
+                setTimeout(() => { modal.classList.add('hidden'); modal.classList.remove('flex'); }, 300);
+            };
+            const openTaskModal = (task = null, presetStatus = null) => {
+                taskForm.reset();
+                document.getElementById('taskPriority').value = 'medium';
+                // Populate project select
+                const projectSelect = document.getElementById('taskProjectSelect');
+                const projectSelectWrapper = document.getElementById('taskProjectSelectWrapper');
+                if (projectSelect) {
+                    projectSelect.innerHTML = '';
+                    data.projects.forEach(p => {
+                        const opt = document.createElement('option');
+                        opt.value = p.id;
+                        opt.textContent = p.name;
+                        if (p.id == data.currentProjectId) opt.selected = true;
+                        projectSelect.appendChild(opt);
+                    });
+                }
+                if (task) {
+                    modalTitle.textContent = 'Uredi zadatak';
+                    document.getElementById('taskId').value = task.id;
+                    document.getElementById('taskTitle').value = task.title;
+                    document.getElementById('taskDescription').value = task.description;
+                    document.getElementById('taskAssignee').value = task.assignee;
+                    document.getElementById('taskStartDate').value = task.startDate;
+                    document.getElementById('taskEndDate').value = task.endDate;
+                    document.getElementById('taskPriority').value = task.priority || 'medium';
+                    if (projectSelectWrapper) projectSelectWrapper.classList.add('hidden');
+                } else {
+                    modalTitle.textContent = 'Novi zadatak';
+                    document.getElementById('taskId').value = '';
+                    if (projectSelectWrapper) projectSelectWrapper.classList.add('hidden');
+                }
+                document.getElementById('taskStatusPreset').value = presetStatus || '';
+                openModal(taskModal, taskModalContent);
+            };
+            const showConfirmModal = (title, message, onConfirm) => {
+                confirmTitle.textContent = title;
+                confirmMessage.innerHTML = message;
+                confirmCallback = onConfirm;
+                openModal(confirmModal, confirmModalContent);
+            };
+
+            // --- Funkcije za projekte ---
+            const renderProjects = () => {
+                projectSelector.innerHTML = '';
+                if(data.projects.length === 0){
+                    addTaskBtn.disabled = true; renameProjectBtn.disabled = true; deleteProjectBtn.disabled = true;
+                    addTaskBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                } else {
+                    addTaskBtn.disabled = false; renameProjectBtn.disabled = false; deleteProjectBtn.disabled = false;
+                    addTaskBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                }
+                data.projects.forEach(project => {
+                    const option = document.createElement('option');
+                    option.value = project.id; option.textContent = project.name;
+                    if (project.id == data.currentProjectId) option.selected = true;
+                    projectSelector.appendChild(option);
+                });
+            };
+            const openProjectModal = (isNew = true) => {
+                projectForm.reset();
+                const project = getCurrentProject();
+                document.getElementById('projectId').value = isNew ? '' : (project ? project.id : '');
+                document.getElementById('projectName').value = isNew ? '' : (project ? project.name : '');
+                projectModalTitle.textContent = isNew ? 'Novi projekt' : 'Preimenuj projekt';
+                submitProjectBtn.textContent = isNew ? 'Kreiraj' : 'Spremi';
+                openModal(projectModal, projectModalContent);
+            };
+            const handleProjectChange = (e) => {
+                data.currentProjectId = parseInt(e.target.value);
+                saveData();
+                renderCurrentView();
+            };
+            const handleDeleteProject = () => {
+                const project = getCurrentProject();
+                if (!project) return;
+                showConfirmModal(
+                    'Obriši projekt',
+                    `Jeste li sigurni da želite obrisati projekt "<b>${project.name}</b>"?`,
+                    () => {
+                        data.projects = data.projects.filter(p => p.id != data.currentProjectId);
+                        data.currentProjectId = data.projects.length > 0 ? data.projects[0].id : null;
+                        saveData();
+                        renderProjects();
+                        renderCurrentView();
+                    }
+                );
+            };
+            const handleProjectFormSubmit = (e) => {
+                e.preventDefault();
+                const projectName = document.getElementById('projectName').value.trim();
+                const projectId = document.getElementById('projectId').value;
+                if (projectName) {
+                    if (projectId) {
+                        const project = data.projects.find(p => p.id == projectId);
+                        if (project) project.name = projectName;
+                    } else {
+                        const newId = data.projects.length > 0 ? Math.max(...data.projects.map(p => p.id)) + 1 : 1;
+                        data.projects.push({ id: newId, name: projectName, tasks: [] });
+                        data.currentProjectId = newId;
+                    }
+                    saveData();
+                    renderProjects();
+                    renderCurrentView();
+                    closeModal(projectModal, projectModalContent);
+                }
+            };
+            
+            // --- Funkcije za zadatke ---
+            const formatDateYMD = (date) => {
+                const y = date.getFullYear();
+                const m = String(date.getMonth() + 1).padStart(2, '0');
+                const d = String(date.getDate()).padStart(2, '0');
+                return `${y}-${m}-${d}`;
+            };
+
+            const addQuickTask = (status, title) => {
+                const project = getCurrentProject();
+                if (!project) return;
+                const newId = project.tasks.length > 0 ? Math.max(...project.tasks.map(t => t.id)) + 1 : 1;
+                const today = new Date();
+                const end = new Date(today);
+                end.setDate(end.getDate() + 7);
+                const newTask = {
+                    id: newId,
+                    title: title,
+                    description: '',
+                    assignee: '',
+                    startDate: formatDateYMD(today),
+                    endDate: formatDateYMD(end),
+                    status: status,
+                    priority: 'medium'
+                };
+                project.tasks.push(newTask);
+                saveData();
+                renderCurrentView();
+            };
+
+                const createTaskCard = (task) => {
+                const card = document.createElement('div');
+                card.setAttribute('draggable', 'true');
+                card.dataset.id = task.id;
+
+                const priorities = {
+                    high: { label: 'Visok', text: 'text-red-800', bg: 'bg-red-100' },
+                    medium: { label: 'Srednji', text: 'text-yellow-800', bg: 'bg-yellow-100' },
+                    low: { label: 'Nizak', text: 'text-green-800', bg: 'bg-green-100' }
+                };
+                const priorityInfo = priorities[task.priority] || priorities.medium;
+
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                const endDate = new Date(task.endDate + 'T00:00:00');
+                
+                let cardBgClass = 'bg-white';
+                let dateClasses = 'text-slate-500';
+                let deadlineText = '';
+
+                if (task.status !== 'done') {
+                    const diffTime = endDate.getTime() - today.getTime();
+                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                    
+                    if (diffDays < 0) {
+                        cardBgClass = 'bg-red-50 border-red-200';
+                        deadlineText = `<span class="font-bold text-red-600">ROK PREMAŠEN</span>`;
+                    } else if (diffDays <= 2) {
+                        cardBgClass = 'bg-yellow-50 border-yellow-200';
+                        deadlineText = `<span class="font-bold text-yellow-600">ROK USKORO ISTIČE</span>`;
+                    }
+                }
+                
+                card.className = `task-card p-4 rounded-lg shadow-sm border ${cardBgClass}`;
+                const statusLabels = { todo: 'Za obaviti', inprogress: 'U izradi', done: 'Gotovo' };
+
+                card.innerHTML = `
+                    <div class="flex justify-between items-start">
+                        <h4 class="font-bold text-slate-800 pr-2">${task.status === 'inprogress' ? '<i class=\'fas fa-person-digging mr-2 text-yellow-500\'></i>' : ''}${task.title}</h4>
+                        <span class="text-xs font-semibold px-2.5 py-0.5 rounded-full whitespace-nowrap ${priorityInfo.bg} ${priorityInfo.text}">${priorityInfo.label}</span>
+                    </div>
+                    <p class="text-sm text-slate-600 my-2">${task.description.substring(0, 100)}${task.description.length > 100 ? '...' : ''}</p>
+                    <div class="mt-3 pt-3 border-t border-slate-200">
+                        <div class="flex justify-between items-center text-sm mb-2">
+                            <span class="flex items-center text-slate-500">
+                                <i class="fas fa-user-circle mr-2"></i>${task.assignee}
+                            </span>
+                        </div>
+                        <div class="flex justify-between items-center text-xs ${dateClasses}">
+                            <div>
+                                <span title="Početak"><i class="far fa-calendar-alt mr-1"></i> ${task.startDate}</span>
+                                <span title="Završetak" class="ml-2"><i class="far fa-calendar-check mr-1"></i> ${task.endDate}</span>
+                            </div>
+                            ${deadlineText}
+                        </div>
+                    </div>
+                    <div class="flex justify-end items-center mt-3 space-x-2">
+                         <div class="relative inline-block text-left">
+                            <button class="status-menu-toggle text-slate-400 hover:text-indigo-600 w-6 h-6 rounded-full flex items-center justify-center" data-id="${task.id}" title="Promijeni status">
+                                <i class="fas fa-ellipsis-v"></i>
+                            </button>
+                            <div id="status-menu-${task.id}" class="status-menu hidden origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-10">
+                                <div class="py-1" role="menu" aria-orientation="vertical">
+                                    <p class="px-4 pt-2 pb-1 text-xs text-slate-400">Premjesti u:</p>
+                                    ${['todo', 'inprogress', 'done'].filter(s => s !== task.status).map(s => `
+                                        <a href="#" class="move-task-btn block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" role="menuitem" data-new-status="${s}" data-id="${task.id}">
+                                            ${statusLabels[s]}
+                                        </a>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        </div>
+                         <button class="edit-btn text-slate-400 hover:text-indigo-600" data-id="${task.id}" title="Uredi"><i class="fas fa-edit"></i></button>
+                         <button class="delete-btn text-slate-400 hover:text-red-600" data-id="${task.id}" title="Obriši"><i class="fas fa-trash"></i></button>
+                    </div>
+                `;
+
+                card.addEventListener('dragstart', (e) => {
+                    e.dataTransfer.setData('text/plain', task.id);
+                    setTimeout(() => card.classList.add('dragging'), 0);
+                });
+                card.addEventListener('dragend', () => card.classList.remove('dragging'));
+                // Open edit modal on card click, ignoring inner controls
+                card.addEventListener('click', (e) => {
+                    if (
+                        e.target.closest('.edit-btn') ||
+                        e.target.closest('.delete-btn') ||
+                        e.target.closest('.status-menu-toggle') ||
+                        e.target.closest('.status-menu') ||
+                        e.target.closest('.move-task-btn')
+                    ) return;
+                    openTaskModal(task);
+                });
+                return card;
+            };
+
+            const renderBoard = () => {
+                kanbanColumns.forEach(col => col.innerHTML = '');
+                const project = getCurrentProject();
+                if (!project || !project.tasks) return;
+                project.tasks.forEach(task => {
+                    const card = createTaskCard(task);
+                    document.querySelector(`[data-status="${task.status}"]`).appendChild(card);
+                });
+            };
+            
+            const renderTaskList = () => {
+                const container = document.getElementById('task-list-container');
+                container.innerHTML = '';
+                const project = getCurrentProject();
+                if (!project || project.tasks.length === 0) {
+                    container.innerHTML = '<p class="text-center text-slate-500 p-8">Nema zadataka za prikaz u listi.</p>';
+                    return;
+                }
+
+                const statusInfo = {
+                    done: { label: 'Gotovo', text: 'text-green-800', bg: 'bg-green-100', icon: '<i class="fas fa-check-double mr-2 text-green-500"></i>' },
+                    inprogress: { label: 'U izradi', text: 'text-yellow-800', bg: 'bg-yellow-100', icon: '<i class="fas fa-person-digging mr-2 text-yellow-500"></i>' },
+                    todo: { label: 'Za obaviti', text: 'text-red-800', bg: 'bg-red-100', icon: '<i class="fas fa-list-check mr-2 text-red-500"></i>' }
+                };
+
+                const byStatus = {
+                    done: [],
+                    inprogress: [],
+                    todo: []
+                };
+                project.tasks.forEach(task => { if (byStatus[task.status]) byStatus[task.status].push(task); });
+                Object.keys(byStatus).forEach(k => byStatus[k].sort((a, b) => new Date(b.endDate) - new Date(a.endDate)));
+
+                const renderSection = (statusKey) => {
+                    const tasks = byStatus[statusKey];
+                    if (tasks.length === 0) return '';
+                    const header = statusInfo[statusKey];
+                    return `
+                        <div class="mb-6">
+                            <div class="text-lg font-semibold flex items-center justify-between mb-2 rounded-md px-3 py-2 ${statusKey === 'done' ? 'bg-green-100 text-green-700' : (statusKey === 'inprogress' ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700')}">
+                                <span class="flex items-center">${header.icon}${header.label}</span>
+                                <button class="list-add-btn bg-indigo-600 text-white text-xs font-semibold py-1.5 px-3 rounded-md shadow hover:bg-indigo-700" data-status="${statusKey}">Dodaj</button>
+                            </div>
+                            <div class="space-y-1">
+                                ${tasks.map(task => `
+                                    <div class="grid grid-cols-12 gap-4 items-center p-2 rounded-md hover:bg-slate-50 text-sm list-row" data-id="${task.id}">
+                                        <div class="col-span-12 sm:col-span-5">
+                                            <div class="flex items-center gap-2 mb-1">
+                                                <select class="list-status-select bg-white border border-slate-300 rounded-md text-xs shadow-sm px-2 py-1 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500" data-id="${task.id}">
+                                                    <option value="done" ${task.status === 'done' ? 'selected' : ''}>Gotovo</option>
+                                                    <option value="inprogress" ${task.status === 'inprogress' ? 'selected' : ''}>U izradi</option>
+                                                    <option value="todo" ${task.status === 'todo' ? 'selected' : ''}>Za obaviti</option>
+                                                </select>
+                                                <p class="font-medium text-slate-800">
+                                                ${statusKey === 'inprogress' ? '<i class=\"fas fa-person-digging mr-2 text-yellow-500\"></i>' : ''}${task.title}
+                                                </p>
+                                            </div>
+                                            <p class="text-xs text-slate-500 sm:hidden">${task.assignee} &bull; Rok: ${task.endDate}</p>
+                                        </div>
+                                        <div class="hidden sm:block sm:col-span-2 text-slate-600">${task.assignee}</div>
+                                        <div class="hidden sm:block sm:col-span-2 text-slate-600">${task.endDate}</div>
+                                        <div class="col-span-8 sm:col-span-2">
+                                            <span class="text-xs font-semibold px-2.5 py-0.5 rounded-full ${header.bg} ${header.text}">${header.label}</span>
+                                        </div>
+                                        <div class="col-span-4 sm:col-span-1 text-right flex justify-end space-x-2">
+                                            <button class="edit-btn text-slate-400 hover:text-indigo-600" data-id="${task.id}" title="Uredi"><i class="fas fa-edit"></i></button>
+                                            <button class="delete-btn text-slate-400 hover:text-red-600" data-id="${task.id}" title="Obriši"><i class="fas fa-trash"></i></button>
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    `;
+                };
+
+                container.innerHTML = [renderSection('done'), renderSection('inprogress'), renderSection('todo')].join('');
+            };
+
+            const renderTimeline = () => {
+                const container = document.getElementById('gantt-chart-container');
+                container.innerHTML = '<svg id="gantt-chart"></svg>'; // Reset svg
+                const project = getCurrentProject();
+                if (!project || project.tasks.length === 0) {
+                    container.innerHTML = '<p class="text-center text-slate-500 p-8">Nema zadataka za prikaz u timelineu.</p>';
+                    return;
+                }
+                const ganttTasks = project.tasks.map(task => {
+                    let progress = 0;
+                    if (task.status === 'done') progress = 100;
+                    else if (task.status === 'inprogress') progress = 50;
+                    return {
+                        id: String(task.id),
+                        name: task.title,
+                        start: task.startDate,
+                        end: task.endDate,
+                        progress: progress,
+                        assignee: task.assignee, // Dodajemo zaduženu osobu
+                        custom_class: `progress-${progress}`
+                    };
+                });
+                gantt = new Gantt("#gantt-chart", ganttTasks, {
+                    header_height: 50, 
+                    bar_height: 20, 
+                    bar_corner_radius: 3,
+                    view_mode: 'Day',
+                    custom_popup_html: function(task) {
+                        const endDate = new Date(task.end).toLocaleDateString('hr-HR');
+                        const assignee = task.assignee || 'Nedodijeljeno';
+                        return `
+                            <div class="gantt-popup-workload-link bg-white p-3 rounded-lg shadow-xl border border-slate-200 text-sm cursor-pointer hover:bg-slate-50" data-assignee="${assignee}">
+                                <div class="font-bold text-slate-800 mb-2">${task.name}</div>
+                                <div class="text-xs text-slate-500 border-t pt-2 mt-2">
+                                    <p><i class="fas fa-user-circle fa-fw mr-1"></i><strong>Zadužen/a:</strong> ${assignee}</p>
+                                    <p class="mt-1"><i class="far fa-calendar-check fa-fw mr-1"></i><strong>Rok:</strong> ${endDate}</p>
+                                    <p class="text-indigo-600 text-center mt-2 font-semibold">Prikaži opterećenje <i class="fas fa-arrow-right fa-xs ml-1"></i></p>
+                                </div>
+                            </div>
+                        `;
+                    }
+                });
+            };
+
+            // --- Calendar ---
+            const projectColors = () => {
+                const palette = ['bg-indigo-100 text-indigo-700','bg-emerald-100 text-emerald-700','bg-amber-100 text-amber-700','bg-sky-100 text-sky-700','bg-pink-100 text-pink-700','bg-purple-100 text-purple-700','bg-teal-100 text-teal-700'];
+                const map = new Map();
+                data.projects.forEach((p, idx) => map.set(p.id, palette[idx % palette.length]));
+                return map;
+            };
+
+            const renderCalendar = () => {
+                const grid = document.getElementById('calendar-grid');
+                const monthLabel = document.getElementById('calendarMonthLabel');
+                if (!grid || !monthLabel) return;
+                grid.innerHTML = '';
+
+                const { year, month } = calendarState; // month 0-11
+                const firstDay = new Date(year, month, 1);
+                const startWeekday = (firstDay.getDay() + 6) % 7; // make Monday=0
+                const daysInMonth = new Date(year, month + 1, 0).getDate();
+                monthLabel.textContent = firstDay.toLocaleDateString('hr-HR', { month: 'long', year: 'numeric' });
+
+                // Weekday headers
+                const weekdays = ['Pon','Uto','Sri','Čet','Pet','Sub','Ned'];
+                weekdays.forEach(w => {
+                    const h = document.createElement('div');
+                    h.className = 'text-xs font-semibold text-slate-500 uppercase px-2';
+                    h.textContent = w;
+                    grid.appendChild(h);
+                });
+
+                const colorMap = projectColors();
+
+                // Empty cells before month start
+                for (let i = 0; i < startWeekday; i++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'min-h-[100px] rounded-md border border-slate-200 bg-slate-50';
+                    grid.appendChild(cell);
+                }
+
+                // Build tasks by endDate per date across all projects
+                const tasksByDate = {};
+                data.projects.forEach(p => {
+                    (p.tasks || []).forEach(t => {
+                        const d = t.endDate;
+                        if (!d) return;
+                        if (!tasksByDate[d]) tasksByDate[d] = [];
+                        tasksByDate[d].push({ ...t, projectId: p.id, projectName: p.name });
+                    });
+                });
+
+                for (let day = 1; day <= daysInMonth; day++) {
+                    const dateStr = `${year}-${String(month + 1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+                    const cell = document.createElement('div');
+                    cell.className = 'relative min-h-[120px] rounded-md border border-slate-200 hover:shadow-sm transition bg-white';
+
+                    // Day header and hover add button
+                    const header = document.createElement('div');
+                    header.className = 'flex items-center justify-between px-2 py-1 text-xs text-slate-600 border-b';
+                    header.innerHTML = `<span class="font-semibold">${day}</span><button class="hidden add-task-day text-indigo-600 hover:text-indigo-800" title="Dodaj" data-date="${dateStr}"><i class="fas fa-plus"></i></button>`;
+                    cell.appendChild(header);
+
+                    cell.addEventListener('mouseenter', () => { const b = cell.querySelector('.add-task-day'); if (b) b.classList.remove('hidden'); });
+                    cell.addEventListener('mouseleave', () => { const b = cell.querySelector('.add-task-day'); if (b) b.classList.add('hidden'); });
+
+                    const body = document.createElement('div');
+                    body.className = 'p-2 space-y-1';
+                    const items = (tasksByDate[dateStr] || []).sort((a,b) => a.projectId - b.projectId);
+                    items.forEach(item => {
+                        const pill = document.createElement('div');
+                        pill.className = `text-xs px-2 py-1 rounded ${colorMap.get(item.projectId)} cursor-pointer`;
+                        pill.textContent = `${item.title} (${item.projectName})`;
+                        pill.addEventListener('click', () => openTaskModal(item));
+                        body.appendChild(pill);
+                    });
+                    cell.appendChild(body);
+
+                    grid.appendChild(cell);
+                }
+
+                // Prev/Next
+                const prevBtn = document.getElementById('prevMonthBtn');
+                const nextBtn = document.getElementById('nextMonthBtn');
+                if (prevBtn && nextBtn) {
+                    prevBtn.onclick = () => {
+                        const d = new Date(calendarState.year, calendarState.month - 1, 1);
+                        calendarState = { year: d.getFullYear(), month: d.getMonth() };
+                        renderCalendar();
+                    };
+                    nextBtn.onclick = () => {
+                        const d = new Date(calendarState.year, calendarState.month + 1, 1);
+                        calendarState = { year: d.getFullYear(), month: d.getMonth() };
+                        renderCalendar();
+                    };
+                }
+            };
+
+            const renderWorkload = () => {
+                const container = document.getElementById('workload-container');
+                const searchInput = document.getElementById('workloadSearch');
+                const searchDropdown = document.getElementById('workloadSearchDropdown');
+
+                // To avoid listener pile-up, clone and replace the search input node.
+                const newSearchInput = searchInput.cloneNode(true);
+                searchInput.parentNode.replaceChild(newSearchInput, searchInput);
+
+                container.innerHTML = '';
+                searchDropdown.innerHTML = '';
+
+                const project = getCurrentProject();
+                if (!project || project.tasks.length === 0) {
+                    container.innerHTML = '<p class="text-center text-slate-500 p-8">Nema članova tima na ovom projektu.</p>';
+                    newSearchInput.value = '';
+                    newSearchInput.disabled = true;
+                    return;
+                }
+                newSearchInput.disabled = false;
+                
+                const allAssignees = [...new Set(project.tasks.map(task => task.assignee || 'Nedodijeljeno'))].sort();
+                const assigneesSet = new Set(allAssignees);
+
+                const displayWorkloadCards = (filter = '') => {
+                    container.innerHTML = '';
+                    const lowercasedFilter = filter.toLowerCase().trim();
+
+                    // Aggregate workload across ALL projects, but only for assignees present in the current project's team
+                    const workload = data.projects.reduce((acc, p) => {
+                        (p.tasks || []).forEach(task => {
+                            const assignee = task.assignee || 'Nedodijeljeno';
+                            if (!assigneesSet.has(assignee)) return;
+                            if (!acc[assignee]) {
+                                acc[assignee] = { todo: 0, inprogress: 0, done: 0, total: 0 };
+                            }
+                            if (task.status === 'done') {
+                                acc[assignee].done++;
+                            } else if (task.status === 'todo' || task.status === 'inprogress') {
+                                acc[assignee][task.status]++;
+                                acc[assignee].total++;
+                            }
+                        });
+                        return acc;
+                    }, {});
+
+                    const filteredAssignees = Object.entries(workload)
+                        .filter(([assignee]) => assignee.toLowerCase().includes(lowercasedFilter))
+                        .sort((a, b) => a[0].localeCompare(b[0]));
+
+                    if (filteredAssignees.length === 0) {
+                        container.innerHTML = '<p class="text-center text-slate-500 p-8">Nema rezultata za vašu pretragu.</p>';
+                    } else {
+                        filteredAssignees.forEach(([assignee, stats]) => {
+                            const card = document.createElement('div');
+                            card.className = 'bg-slate-50 p-4 rounded-lg border border-slate-200';
+                            // Build active tasks per project across all projects for this assignee
+                            const activeStatuses = new Set(['todo', 'inprogress']);
+                            const projectsForAssignee = data.projects
+                                .map(p => ({
+                                    projectId: p.id,
+                                    projectName: p.name,
+                                    tasks: (p.tasks || []).filter(t => (t.assignee || 'Nedodijeljeno') === assignee && activeStatuses.has(t.status))
+                                }))
+                                .filter(p => p.tasks.length > 0);
+
+                            const hasMultipleProjects = projectsForAssignee.length > 1;
+
+                            const detailsHtml = projectsForAssignee.length === 0 ? '' : `
+                                <div class="mt-4">
+                                    ${projectsForAssignee.map(p => `
+                                        <div class="mb-3">
+                                            <button class="w-full flex items-center justify-between text-left text-sm font-semibold text-slate-700 hover:text-indigo-600 group" data-project-id="${p.projectId}" data-assignee="${assignee}">
+                                                <span class="truncate">
+                                                    <i class="fas fa-folder-open mr-2 text-slate-400"></i>${p.projectName}
+                                                    <span class="ml-2 text-xs font-normal text-slate-500">(${p.tasks.length} aktivnih)</span>
+                                                </span>
+                                                <i class="fas fa-chevron-down ml-2 text-slate-400 group-hover:text-indigo-600"></i>
+                                            </button>
+                                            <div class="mt-2 pl-5 border-l border-slate-200 hidden" data-details-for-project="${p.projectId}" data-assignee="${assignee}">
+                                                ${p.tasks.map(t => `
+                                                    <div class="flex items-start justify-between py-1 text-sm">
+                                                        <div class="pr-3">
+                                                            <p class="font-medium text-slate-800">${t.title}</p>
+                                                            <p class="text-xs text-slate-500">Rok: ${t.endDate} • Status: ${t.status === 'todo' ? 'Za obaviti' : 'U izradi'}</p>
+                                                        </div>
+                                                        <span class="text-xs px-2 py-0.5 rounded-full ${t.status === 'todo' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}">${t.status === 'todo' ? 'Za obaviti' : 'U izradi'}</span>
+                                                    </div>
+                                                `).join('')}
+                                            </div>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            `;
+
+                            card.innerHTML = `
+                                <h3 class="font-bold text-lg text-slate-800 flex items-center mb-4">
+                                    <i class="fas fa-user-circle mr-3 text-slate-400"></i>${assignee}
+                                </h3>
+                                <div class="space-y-2 text-sm">
+                                    <div class="flex justify-between items-center">
+                                        <span class="text-slate-600">Ukupno zadataka:</span>
+                                        <span class="font-semibold text-indigo-600 text-base">${stats.total}</span>
+                                    </div>
+                                    <div class="pt-2 border-t">
+                                        <div class="flex justify-between items-center text-red-600"><span><i class="fas fa-list-check fa-fw mr-2"></i>Za obaviti</span><span class="font-mono font-semibold">${stats.todo}</span></div>
+                                        <div class="flex justify-between items-center text-yellow-600"><span><i class="fas fa-person-digging fa-fw mr-2"></i>U izradi</span><span class="font-mono font-semibold">${stats.inprogress}</span></div>
+                                        <div class="flex justify-between items-center text-green-600"><span><i class="fas fa-check-double fa-fw mr-2"></i>Gotovo</span><span class="font-mono font-semibold">${stats.done}</span></div>
+                                    </div>
+                                    ${projectsForAssignee.length > 0 ? `
+                                        <div class="mt-3 pt-3 border-t">
+                                            <div class="flex items-center justify-between">
+                                                <span class="text-slate-700 font-semibold">Aktivni zadaci po projektima</span>
+                                                <button class="text-xs text-indigo-600 hover:underline" data-toggle-all="true" data-assignee="${assignee}">${hasMultipleProjects ? 'Proširi sve' : 'Prikaži'}</button>
+                                            </div>
+                                            ${detailsHtml}
+                                        </div>
+                                    ` : ''}
+                                </div>
+                            `;
+                            // Toggle logic for project sections inside this card
+                            card.addEventListener('click', (evt) => {
+                                const toggleAllBtn = evt.target.closest('[data-toggle-all][data-assignee]');
+                                if (toggleAllBtn) {
+                                    const targetAssignee = toggleAllBtn.getAttribute('data-assignee');
+                                    if (targetAssignee === assignee) {
+                                        const sections = card.querySelectorAll(`[data-details-for-project][data-assignee="${assignee}"]`);
+                                        const willExpand = toggleAllBtn.textContent.trim() === 'Proširi sve' || toggleAllBtn.textContent.trim() === 'Prikaži';
+                                        sections.forEach(sec => sec.classList.toggle('hidden', !willExpand ? true : false));
+                                        toggleAllBtn.textContent = willExpand ? 'Sažmi sve' : 'Proširi sve';
+                                    }
+                                    return;
+                                }
+                                const headerBtn = evt.target.closest('button[data-project-id][data-assignee]');
+                                if (headerBtn) {
+                                    const pid = headerBtn.getAttribute('data-project-id');
+                                    const target = card.querySelector(`[data-details-for-project="${pid}"][data-assignee="${assignee}"]`);
+                                    if (target) target.classList.toggle('hidden');
+                                }
+                            });
+                            container.appendChild(card);
+                        });
+                    }
+                };
+
+                const updateSearchDropdown = (filter = '') => {
+                    searchDropdown.innerHTML = '';
+                    const lowercasedFilter = filter.toLowerCase().trim();
+                    const filtered = allAssignees.filter(name => name.toLowerCase().includes(lowercasedFilter));
+
+                    if (filtered.length > 0 && newSearchInput.value !== '') {
+                        filtered.forEach(name => {
+                            const item = document.createElement('a');
+                            item.href = '#';
+                            item.textContent = name;
+                            item.className = 'block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100';
+                            item.addEventListener('mousedown', (e) => {
+                                e.preventDefault();
+                                newSearchInput.value = name;
+                                displayWorkloadCards(name);
+                                searchDropdown.classList.add('hidden');
+                            });
+                            searchDropdown.appendChild(item);
+                        });
+                        searchDropdown.classList.remove('hidden');
+                    } else {
+                        searchDropdown.classList.add('hidden');
+                    }
+                };
+                
+                newSearchInput.addEventListener('input', () => {
+                    displayWorkloadCards(newSearchInput.value);
+                    updateSearchDropdown(newSearchInput.value);
+                });
+
+                newSearchInput.addEventListener('focus', () => {
+                     updateSearchDropdown(newSearchInput.value);
+                });
+
+                // Initial render
+                displayWorkloadCards();
+                newSearchInput.value = '';
+            };
+
+            const handleTaskFormSubmit = (e) => {
+                e.preventDefault();
+                const id = document.getElementById('taskId').value;
+                let project = getCurrentProject();
+                const taskData = {
+                    title: document.getElementById('taskTitle').value,
+                    description: document.getElementById('taskDescription').value,
+                    assignee: document.getElementById('taskAssignee').value,
+                    startDate: document.getElementById('taskStartDate').value,
+                    endDate: document.getElementById('taskEndDate').value,
+                    priority: document.getElementById('taskPriority').value
+                };
+                
+                if (id) {
+                    project.tasks = project.tasks.map(task => task.id == id ? { ...task, ...taskData } : task);
+                } else {
+                    const newId = project.tasks.length > 0 ? Math.max(...project.tasks.map(t => t.id)) + 1 : 1;
+                    const preset = document.getElementById('taskStatusPreset').value;
+                    const status = preset === 'inprogress' ? 'inprogress' : (preset === 'todo' ? 'todo' : 'todo');
+                    // If project selector is visible (calendar add), add to chosen project
+                    const projectSelect = document.getElementById('taskProjectSelect');
+                    const projectSelectWrapper = document.getElementById('taskProjectSelectWrapper');
+                    if (projectSelect && projectSelectWrapper && !projectSelectWrapper.classList.contains('hidden')) {
+                        const targetProjectId = parseInt(projectSelect.value);
+                        const target = data.projects.find(p => p.id == targetProjectId);
+                        if (target) project = target;
+                    }
+                    project.tasks.push({ ...taskData, id: newId, status });
+                }
+                saveData();
+                renderCurrentView();
+                closeModal(taskModal, taskModalContent);
+            };
+            
+            // --- Event listeneri ---
+            projectSelector.addEventListener('change', handleProjectChange);
+            newProjectBtn.addEventListener('click', () => openProjectModal(true));
+            renameProjectBtn.addEventListener('click', () => openProjectModal(false));
+            deleteProjectBtn.addEventListener('click', handleDeleteProject);
+            addTaskBtn.addEventListener('click', () => openTaskModal());
+            exportExcelBtn.addEventListener('click', () => {
+                const project = getCurrentProject();
+                if (!project) return;
+                const rows = (project.tasks || []).map(t => ({
+                    ID: t.id,
+                    Naziv: t.title,
+                    Opis: t.description,
+                    Zadužena: t.assignee,
+                    "Datum početka": t.startDate,
+                    Rok: t.endDate,
+                    Status: t.status === 'todo' ? 'Za obaviti' : (t.status === 'inprogress' ? 'U izradi' : 'Gotovo'),
+                    Prioritet: t.priority || ''
+                }));
+                const wb = XLSX.utils.book_new();
+                const ws = XLSX.utils.json_to_sheet(rows.length ? rows : [{ Napomena: 'Nema zadataka u ovom projektu' }]);
+                XLSX.utils.book_append_sheet(wb, ws, project.name.substring(0,31));
+                XLSX.writeFile(wb, `${project.name.replace(/[^\w\-]+/g,'_')}_export.xlsx`);
+            });
+            viewTabs.forEach(tab => tab.addEventListener('click', () => switchView(tab.id.replace('Tab', ''))));
+            // Calendar add from day hover '+' (delegated on calendar-view)
+            document.getElementById('calendar-view').addEventListener('click', (e) => {
+                const addBtn = e.target.closest('.add-task-day[data-date]');
+                if (!addBtn) return;
+                const date = addBtn.getAttribute('data-date');
+                // Open modal with date prefilled and require project selection (handled below)
+                openTaskModal(null, 'todo');
+                document.getElementById('taskStartDate').value = date;
+                document.getElementById('taskEndDate').value = date;
+                // Show project selector in modal if present
+                const projectSelect = document.getElementById('taskProjectSelect');
+                if (projectSelect) projectSelect.parentElement.classList.remove('hidden');
+            });
+
+            // Column add buttons open modal with preset status
+            document.getElementById('kanban-view').addEventListener('click', (e) => {
+                const btn = e.target.closest('.column-add-btn[data-status]');
+                if (!btn) return;
+                const status = btn.getAttribute('data-status');
+                openTaskModal(null, status);
+            });
+
+            // Modali
+            cancelBtn.addEventListener('click', () => closeModal(taskModal, taskModalContent));
+            taskModal.addEventListener('click', (e) => { if (e.target === taskModal) closeModal(taskModal, taskModalContent); });
+            taskForm.addEventListener('submit', handleTaskFormSubmit);
+            cancelProjectBtn.addEventListener('click', () => closeModal(projectModal, projectModalContent));
+            projectModal.addEventListener('click', (e) => { if (e.target === projectModal) closeModal(projectModal, projectModalContent); });
+            projectForm.addEventListener('submit', handleProjectFormSubmit);
+            confirmActionBtn.addEventListener('click', () => { if (typeof confirmCallback === 'function') confirmCallback(); closeModal(confirmModal, confirmModalContent); });
+            cancelConfirmBtn.addEventListener('click', () => closeModal(confirmModal, confirmModalContent));
+            confirmModal.addEventListener('click', (e) => { if (e.target === confirmModal) closeModal(confirmModal, confirmModalContent); });
+
+            // Delegacija događaja za gumbe na karticama unutar svih prikaza
+            document.getElementById('views').addEventListener('click', (e) => {
+                const project = getCurrentProject();
+                if (!project) return;
+
+                const editBtn = e.target.closest('.edit-btn');
+                if (editBtn) {
+                    const task = project.tasks.find(t => t.id == editBtn.dataset.id);
+                    openTaskModal(task);
+                    return;
+                }
+
+                const deleteBtn = e.target.closest('.delete-btn');
+                if (deleteBtn) {
+                    const taskId = deleteBtn.dataset.id;
+                    const task = project.tasks.find(t => t.id == taskId);
+                    if (task) {
+                        showConfirmModal('Obriši zadatak', `Jeste li sigurni da želite obrisati zadatak "<b>${task.title}</b>"?`, () => {
+                            project.tasks = project.tasks.filter(t => t.id != taskId);
+                            saveData();
+                            renderCurrentView();
+                        });
+                    }
+                    return;
+                }
+
+                // Kanban-specifične akcije
+                const statusMenuToggle = e.target.closest('.status-menu-toggle');
+                if (statusMenuToggle) {
+                    document.querySelectorAll('.status-menu').forEach(menu => {
+                       if (menu.id !== `status-menu-${statusMenuToggle.dataset.id}`) menu.classList.add('hidden');
+                    });
+                    document.getElementById(`status-menu-${statusMenuToggle.dataset.id}`).classList.toggle('hidden');
+                    return;
+                }
+
+                const moveTaskBtn = e.target.closest('.move-task-btn');
+                if (moveTaskBtn) {
+                    e.preventDefault();
+                    const task = project.tasks.find(t => t.id == moveTaskBtn.dataset.id);
+                    if (task) {
+                        task.status = moveTaskBtn.dataset.newStatus;
+                        saveData();
+                        renderCurrentView();
+                    }
+                }
+
+                // List view: Add button in section header
+                const listAddBtn = e.target.closest('.list-add-btn[data-status]');
+                if (listAddBtn) {
+                    const status = listAddBtn.getAttribute('data-status');
+                    openTaskModal(null, status);
+                    return;
+                }
+
+                // Open edit modal when clicking on a list row (excluding interactive controls)
+                const listRow = e.target.closest('.list-row[data-id]');
+                if (listRow) {
+                    if (
+                        e.target.closest('.edit-btn') ||
+                        e.target.closest('.delete-btn') ||
+                        e.target.closest('.list-status-select')
+                    ) return;
+                    const taskId = listRow.getAttribute('data-id');
+                    const task = project.tasks.find(t => String(t.id) === String(taskId));
+                    if (task) openTaskModal(task);
+                }
+            });
+
+            // Inline status change from Task List select
+            document.getElementById('views').addEventListener('change', (e) => {
+                const select = e.target.closest('.list-status-select[data-id]');
+                if (!select) return;
+                const project = getCurrentProject();
+                if (!project) return;
+                const task = project.tasks.find(t => t.id == select.getAttribute('data-id'));
+                if (!task) return;
+                const newStatus = select.value;
+                if (['todo', 'inprogress', 'done'].includes(newStatus)) {
+                    task.status = newStatus;
+                    saveData();
+                    renderCurrentView();
+                }
+            });
+
+            document.body.addEventListener('click', (e) => {
+                // Hide status menu
+                if (!e.target.closest('.status-menu-toggle') && !e.target.closest('.status-menu')) {
+                    document.querySelectorAll('.status-menu').forEach(menu => menu.classList.add('hidden'));
+                }
+                 // Hide workload search dropdown
+                if (!e.target.closest('.workload-search-container')) {
+                    const dropdown = document.getElementById('workloadSearchDropdown');
+                    if (dropdown) dropdown.classList.add('hidden');
+                }
+                
+                // Handle Gantt popup click to switch to workload view
+                const popup = e.target.closest('.gantt-popup-workload-link');
+                if (popup) {
+                    const assignee = popup.dataset.assignee;
+                    if (assignee && assignee !== 'Nedodijeljeno') {
+                        switchView('workload');
+                        
+                        setTimeout(() => {
+                            const searchInput = document.getElementById('workloadSearch');
+                            if (searchInput) {
+                                searchInput.value = assignee;
+                                searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+                            }
+                        }, 10);
+                    }
+                }
+
+            }, true);
+
+            // Drag and Drop
+            kanbanColumns.forEach(col => {
+                col.addEventListener('dragover', (e) => { e.preventDefault(); col.classList.add('drag-over'); });
+                col.addEventListener('dragleave', () => col.classList.remove('drag-over'));
+                col.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    col.classList.remove('drag-over');
+                    const taskId = e.dataTransfer.getData('text/plain');
+                    const newStatus = col.dataset.status;
+                    const project = getCurrentProject();
+                    const task = project.tasks.find(t => t.id == taskId);
+                    if (task && task.status !== newStatus) {
+                        task.status = newStatus;
+                        saveData();
+                        renderCurrentView();
+                    }
+                });
+            });
+
+            // --- Inicijalizacija ---
+            renderProjects();
+            renderCurrentView();
+        });
+    </script>
+</body>
+</html>
+
