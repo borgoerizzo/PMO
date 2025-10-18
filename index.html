@@ -48,10 +48,18 @@
         .main-content::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 10px; }
         .main-content::-webkit-scrollbar-thumb:hover { background: #64748b; }
 
-        .kanban-column-body::-webkit-scrollbar { width: 6px; }
-        .kanban-column-body::-webkit-scrollbar-track { background: transparent; }
-        .kanban-column-body::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
-        .kanban-column-body::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        .kanban-column-body::-webkit-scrollbar,
+        #activity-log-container::-webkit-scrollbar,
+        #global-search-results::-webkit-scrollbar { width: 6px; }
+        .kanban-column-body::-webkit-scrollbar-track,
+        #activity-log-container::-webkit-scrollbar-track,
+        #global-search-results::-webkit-scrollbar-track { background: transparent; }
+        .kanban-column-body::-webkit-scrollbar-thumb,
+        #activity-log-container::-webkit-scrollbar-thumb,
+        #global-search-results::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        .kanban-column-body::-webkit-scrollbar-thumb:hover,
+        #activity-log-container::-webkit-scrollbar-thumb:hover,
+        #global-search-results::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
 
         /* Frappe Gantt Customizations */
         #gantt-chart .gantt .bar-wrapper.progress-100 .bar,
@@ -132,6 +140,11 @@
             opacity: 1;
             visibility: visible;
         }
+        /* Subtask strikethrough */
+        .subtask-item input:checked + label {
+            text-decoration: line-through;
+            color: #64748b;
+        }
     </style>
 </head>
 <body class="bg-slate-100 text-slate-800">
@@ -188,9 +201,22 @@
             </nav>
 
             <div class="mt-auto p-4 border-t border-slate-700 space-y-2 flex-shrink-0">
-                <button id="exportExcelBtn" class="has-tooltip w-full bg-emerald-600 text-white font-semibold py-2 px-3 rounded-lg shadow-md hover:bg-emerald-700 transition duration-300 flex items-center justify-center text-sm" data-tooltip="Izvezi u Excel">
+                 <button id="infoBtn" class="has-tooltip w-full text-left flex items-center px-3 py-2.5 rounded-md font-medium text-sm transition-colors text-slate-300 hover:bg-slate-700 hover:text-white" data-tooltip="Info">
+                    <i class="fas fa-info-circle fa-fw mr-3 w-5"></i><span class="sidebar-text">Info</span>
+                </button>
+                <label class="text-xs font-semibold text-slate-400 uppercase tracking-wider px-3 sidebar-text pt-2">Podaci</label>
+                 <div class="grid grid-cols-2 gap-2">
+                     <button id="importDataBtn" class="has-tooltip w-full bg-slate-700 hover:bg-slate-600 transition-colors p-2 rounded-md flex flex-col items-center text-xs" title="Uvezi .json" data-tooltip="Uvezi podatke">
+                        <i class="fas fa-upload mb-1"></i> <span class="sidebar-text">Uvezi</span>
+                    </button>
+                    <button id="exportDataBtn" class="has-tooltip w-full bg-slate-700 hover:bg-slate-600 transition-colors p-2 rounded-md flex flex-col items-center text-xs" title="Izvezi .json" data-tooltip="Izvezi podatke">
+                        <i class="fas fa-download mb-1"></i> <span class="sidebar-text">Izvezi</span>
+                    </button>
+                </div>
+                <button id="exportExcelBtn" class="has-tooltip w-full bg-emerald-600 text-white font-semibold py-2 px-3 rounded-lg shadow-md hover:bg-emerald-700 transition duration-300 flex items-center justify-center text-sm mt-2" data-tooltip="Izvezi u Excel">
                     <i class="fas fa-file-excel mr-2"></i> <span class="sidebar-text">Izvezi u Excel</span>
                 </button>
+                <input type="file" id="importFileInput" class="hidden" accept=".json">
             </div>
         </aside>
 
@@ -198,9 +224,16 @@
         <main class="flex-1 flex flex-col overflow-hidden">
             <header class="flex items-center justify-between h-16 px-6 border-b border-slate-200 bg-white flex-shrink-0">
                 <h2 id="viewTitle" class="text-xl font-bold text-slate-700">Kanban ploča</h2>
-                <button id="addTaskBtn" class="bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-indigo-700 transition duration-300 flex items-center">
-                    <i class="fas fa-plus mr-2"></i> Dodaj zadatak
-                </button>
+                <div class="flex items-center gap-4">
+                    <div class="relative w-64" id="global-search-container">
+                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><i class="fas fa-search text-slate-400"></i></div>
+                        <input type="text" id="globalSearch" placeholder="Pronađi zadatak..." class="block w-full pl-10 pr-3 py-2 bg-white border border-slate-300 rounded-md shadow-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+                        <div id="global-search-results" class="absolute mt-2 w-full bg-white rounded-md shadow-lg border border-slate-200 z-50 hidden max-h-80 overflow-y-auto"></div>
+                    </div>
+                    <button id="addTaskBtn" class="bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-indigo-700 transition duration-300 flex items-center">
+                        <i class="fas fa-plus mr-2"></i> Dodaj zadatak
+                    </button>
+                </div>
             </header>
 
             <div id="views" class="flex-1 overflow-x-hidden overflow-y-auto p-6 bg-slate-100 main-content">
@@ -268,31 +301,23 @@
 
                     <!-- Charts -->
                     <div class="grid grid-cols-1 lg:grid-cols-5 gap-6">
-                        <div class="lg:col-span-2 bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                            <h3 class="font-bold text-slate-800 mb-4">Zaduženja po članu tima</h3>
-                            <div class="relative h-64"><canvas id="assigneePieChart"></canvas></div>
-                        </div>
-                        <div class="lg:col-span-3 bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                            <h3 class="font-bold text-slate-800 mb-4">Napredak članova tima (%)</h3>
-                             <div class="relative h-64"><canvas id="assigneeBarChart"></canvas></div>
-                        </div>
+                        <div class="lg:col-span-2 bg-white p-6 rounded-xl shadow-sm border border-slate-200"><h3 class="font-bold text-slate-800 mb-4">Zaduženja po članu tima</h3><div class="relative h-64"><canvas id="assigneePieChart"></canvas></div></div>
+                        <div class="lg:col-span-3 bg-white p-6 rounded-xl shadow-sm border border-slate-200"><h3 class="font-bold text-slate-800 mb-4">Napredak članova tima (%)</h3><div class="relative h-64"><canvas id="assigneeBarChart"></canvas></div></div>
                     </div>
-                    
-                    <!-- Deadlines -->
-                    <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                        <h3 class="font-bold text-slate-800 mb-4">Pregled rokova</h3>
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <div>
-                                <h4 class="font-semibold text-amber-600 mb-3"><i class="fas fa-hourglass-half mr-2"></i>Uskoro istječe rok</h4>
-                                <ul id="due-soon-list" class="space-y-2 text-sm"></ul>
-                            </div>
-                            <div>
-                                <h4 class="font-semibold text-red-600 mb-3"><i class="fas fa-exclamation-circle mr-2"></i>Rok premašen</h4>
-                                <ul id="overdue-list" class="space-y-2 text-sm"></ul>
+                     <!-- Deadlines & Activity -->
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                            <h3 class="font-bold text-slate-800 mb-4">Pregled rokova</h3>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div><h4 class="font-semibold text-amber-600 mb-3"><i class="fas fa-hourglass-half mr-2"></i>Uskoro istječe rok</h4><ul id="due-soon-list" class="space-y-2 text-sm"></ul></div>
+                                <div><h4 class="font-semibold text-red-600 mb-3"><i class="fas fa-exclamation-circle mr-2"></i>Rok premašen</h4><ul id="overdue-list" class="space-y-2 text-sm"></ul></div>
                             </div>
                         </div>
+                        <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                            <h3 class="font-bold text-slate-800 mb-4">Dnevnik aktivnosti</h3>
+                            <div id="activity-log-container" class="space-y-4 max-h-48 overflow-y-auto pr-2"></div>
+                        </div>
                     </div>
-
                 </div>
             </div>
         </main>
@@ -300,7 +325,7 @@
 
     <!-- Modals -->
     <div id="taskModal" class="fixed inset-0 bg-black bg-opacity-60 hidden items-center justify-center z-50 p-4">
-        <div id="modal-content" class="bg-white rounded-lg shadow-2xl w-full max-w-lg p-8 transform transition-all duration-300 scale-95 opacity-0">
+        <div id="modal-content" class="bg-white rounded-lg shadow-2xl w-full max-w-lg p-8 transform transition-all duration-300 scale-95 opacity-0 overflow-y-auto max-h-screen">
             <div class="flex items-center justify-between mb-6">
                 <h3 id="modalTitle" class="text-2xl font-bold text-slate-800">Novi zadatak</h3>
                 <button id="cancelBtn" class="text-slate-400 hover:text-slate-600">&times;</button>
@@ -334,6 +359,15 @@
                         <div>
                             <label for="taskEndDate" class="block text-sm font-medium text-slate-600 mb-1">Očekivani završetak</label>
                             <input type="date" id="taskEndDate" class="w-full px-3 py-2 bg-white border border-slate-300 rounded-md shadow-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500" required>
+                        </div>
+                    </div>
+                    <!-- Subtasks Section -->
+                    <div class="border-t pt-4">
+                        <label class="block text-sm font-medium text-slate-600 mb-2">Podzadaci</label>
+                        <div id="subtaskList" class="space-y-2 mb-3"></div>
+                        <div class="flex gap-2">
+                            <input type="text" id="newSubtaskInput" placeholder="Dodaj novi podzadatak..." class="flex-grow w-full px-3 py-2 bg-white border border-slate-300 rounded-md shadow-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+                            <button type="button" id="addSubtaskBtn" class="bg-slate-200 text-slate-700 font-semibold py-2 px-4 rounded-lg hover:bg-slate-300 transition">Dodaj</button>
                         </div>
                     </div>
                 </div>
@@ -376,6 +410,42 @@
             </div>
         </div>
     </div>
+    
+    <div id="infoModal" class="fixed inset-0 bg-black bg-opacity-60 hidden items-center justify-center z-50 p-4">
+        <div id="info-modal-content" class="bg-white rounded-lg shadow-2xl w-full max-w-lg transform transition-all duration-300 scale-95 opacity-0 flex flex-col max-h-[90vh]">
+            <div class="flex-shrink-0 p-6 border-b">
+                 <div class="flex items-center justify-between">
+                    <h3 class="text-2xl font-bold text-slate-800">O aplikaciji ProjectFlow</h3>
+                    <button id="closeInfoBtn" class="text-slate-400 hover:text-slate-600">&times;</button>
+                </div>
+            </div>
+            <div class="overflow-y-auto p-6">
+                <div class="text-slate-600 space-y-4">
+                    <p>ProjectFlow je jednostavna, ali moćna aplikacija za upravljanje projektima dizajnirana da vam pomogne organizirati zadatke i pratiti napredak vašeg tima.</p>
+                    
+                    <div class="p-4 bg-amber-100 rounded-lg text-amber-800">
+                        <h4 class="font-bold mb-2"><i class="fas fa-exclamation-triangle mr-2"></i>Važna informacija o čuvanju podataka</h4>
+                        <p class="text-sm">Svi vaši podaci spremaju se isključivo u vašem web pregledniku. Kako biste sačuvali svoje podatke od slučajnog brisanja ili ih prebacili na drugo računalo, redovito koristite opciju <strong>"Izvezi"</strong>. Time ćete preuzeti datoteku (`.json`) sa svim vašim projektima koju kasnije možete učitati pomoću opcije <strong>"Uvezi"</strong>.</p>
+                    </div>
+
+                    <ul class="list-disc list-inside space-y-2">
+                        <li><b>Višestruki prikazi:</b> Organizirajte zadatke koristeći Kanban ploču, Listu, Gantt chart, Kalendar ili Workload prikaz.</li>
+                        <li><b>Nadzorna ploča:</b> Dobijte brzi pregled statistike projekta, napretka članova tima i nadolazećih rokova.</li>
+                        <li><b>Detaljno praćenje:</b> Svaki zadatak može imati podzadatke, prioritete, zadužene osobe i rokove.</li>
+                        <li><b>Transparentnost:</b> Pratite sve promjene kroz Dnevnik aktivnosti i brzo pronađite bilo koji zadatak pomoću globalne pretrage.</li>
+                    </ul>
+                    <p>Aplikacija je napravljena kao osobni alat za praćenje produktivnosti i razvoja projekta.</p>
+                </div>
+                 <div class="mt-6 pt-4 border-t text-center text-sm text-slate-500">
+                    <p>&copy; 2025 Andrej Vukić</p>
+                    <p>andrej.vukic@protonmail.com</p>
+                </div>
+            </div>
+             <div class="flex-shrink-0 p-6 border-t flex justify-end">
+                 <button id="closeInfoBtnFooter" class="bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-indigo-700 transition">Zatvori</button>
+            </div>
+        </div>
+    </div>
 
 
     <script>
@@ -405,9 +475,20 @@
             const confirmMessage = document.getElementById('confirmMessage');
             const cancelConfirmBtn = document.getElementById('cancelConfirmBtn');
             const confirmActionBtn = document.getElementById('confirmActionBtn');
+            const infoBtn = document.getElementById('infoBtn');
+            const infoModal = document.getElementById('infoModal');
+            const infoModalContent = document.getElementById('info-modal-content');
+            const closeInfoBtn = document.getElementById('closeInfoBtn');
+            const closeInfoBtnFooter = document.getElementById('closeInfoBtnFooter');
+            const importDataBtn = document.getElementById('importDataBtn');
+            const exportDataBtn = document.getElementById('exportDataBtn');
+            const importFileInput = document.getElementById('importFileInput');
             let confirmCallback = null;
             const sidebar = document.getElementById('sidebar');
             const sidebarToggle = document.getElementById('sidebarToggle');
+            const globalSearchInput = document.getElementById('globalSearch');
+            const globalSearchResults = document.getElementById('global-search-results');
+
 
             // View Elements
             const viewTabs = document.querySelectorAll('.view-tab');
@@ -456,13 +537,18 @@
                 projects: [{ 
                     id: 1, name: 'Redizajn Web Stranice', 
                     tasks: [
-                        { id: 1, title: 'Analiza tržišta', description: 'Istražiti konkurenciju i ciljanu publiku.', assignee: 'Ana Anić', startDate: '2025-10-20', endDate: '2025-10-25', status: 'done', priority: 'high' },
-                        { id: 2, title: 'Izrada wireframea', description: 'Definirati strukturu i layout stranice.', assignee: 'Ivan Ivić', startDate: '2025-10-22', endDate: '2025-10-28', status: 'inprogress', priority: 'medium' },
-                        { id: 3, title: 'Dizajn korisničkog sučelja', description: 'Kreirati vizualni identitet i komponente.', assignee: 'Ana Anić', startDate: '2025-10-25', endDate: '2025-11-05', status: 'inprogress', priority: 'high' },
-                        { id: 4, title: 'Frontend razvoj', description: 'Implementirati dizajn u HTML/CSS/JS.', assignee: 'Marko Markić', startDate: '2025-11-01', endDate: '2025-11-15', status: 'todo', priority: 'high' },
-                        { id: 5, title: 'Backend integracija', description: 'Povezati frontend s CMS-om.', assignee: 'Petra Petrić', startDate: '2025-11-10', endDate: '2025-11-25', status: 'todo', priority: 'medium'},
-                        { id: 6, title: 'Testiranje i ispravci', description: 'Osigurati funkcionalnost i responzivnost.', assignee: 'Ivan Ivić', startDate: '2025-11-26', endDate: '2025-11-30', status: 'todo', priority: 'low' }
-                    ] 
+                        { id: 1, title: 'Analiza tržišta', description: 'Istražiti konkurenciju i ciljanu publiku.', assignee: 'Ana Anić', startDate: '2025-10-20', endDate: '2025-10-25', status: 'done', priority: 'high', subtasks: [] },
+                        { id: 2, title: 'Izrada wireframea', description: 'Definirati strukturu i layout stranice.', assignee: 'Ivan Ivić', startDate: '2025-10-22', endDate: '2025-10-28', status: 'inprogress', priority: 'medium', subtasks: [
+                            {id: 1, text: 'Homepage wireframe', completed: true},
+                            {id: 2, text: 'About Us wireframe', completed: false},
+                            {id: 3, text: 'Contact page wireframe', completed: false}
+                        ] },
+                        { id: 3, title: 'Dizajn korisničkog sučelja', description: 'Kreirati vizualni identitet i komponente.', assignee: 'Ana Anić', startDate: '2025-10-25', endDate: '2025-11-05', status: 'inprogress', priority: 'high', subtasks: [] },
+                        { id: 4, title: 'Frontend razvoj', description: 'Implementirati dizajn u HTML/CSS/JS.', assignee: 'Marko Markić', startDate: '2025-11-01', endDate: '2025-11-15', status: 'todo', priority: 'high', subtasks: [] },
+                        { id: 5, title: 'Backend integracija', description: 'Povezati frontend s CMS-om.', assignee: 'Petra Petrić', startDate: '2025-11-10', endDate: '2025-11-25', status: 'todo', priority: 'medium', subtasks: []},
+                        { id: 6, title: 'Testiranje i ispravci', description: 'Osigurati funkcionalnost i responzivnost.', assignee: 'Ivan Ivić', startDate: '2025-11-26', endDate: '2025-11-30', status: 'todo', priority: 'low', subtasks: [] }
+                    ],
+                    activityLog: []
                 }],
                 currentProjectId: 1
             };
@@ -478,6 +564,19 @@
                     }
                 }
                 return null;
+            };
+
+            const logActivity = (message) => {
+                const project = getCurrentProject();
+                if (!project) return;
+                if (!project.activityLog) {
+                    project.activityLog = [];
+                }
+                project.activityLog.push({
+                    message: message,
+                    timestamp: new Date().toISOString()
+                });
+                saveData();
             };
 
             // --- Funkcije za prikaz ---
@@ -527,6 +626,26 @@
                 content.classList.add('scale-95', 'opacity-0');
                 setTimeout(() => { modal.classList.add('hidden'); modal.classList.remove('flex'); }, 300);
             };
+
+             const renderSubtaskList = (subtasks = []) => {
+                const subtaskList = document.getElementById('subtaskList');
+                subtaskList.innerHTML = '';
+                subtasks.forEach(subtask => {
+                    const subtaskEl = document.createElement('div');
+                    subtaskEl.className = 'flex items-center gap-3 p-2 bg-slate-50 rounded-md subtask-item';
+                    subtaskEl.dataset.id = subtask.id;
+
+                    subtaskEl.innerHTML = `
+                        <input type="checkbox" class="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" ${subtask.completed ? 'checked' : ''}>
+                        <label class="flex-grow text-sm text-slate-800">${subtask.text}</label>
+                        <button type="button" class="delete-subtask-btn text-slate-400 hover:text-red-600">
+                            <i class="fas fa-trash-alt"></i>
+                        </button>
+                    `;
+                    subtaskList.appendChild(subtaskEl);
+                });
+            };
+            
             const openTaskModal = (task = null, presetStatus = null) => {
                 taskForm.reset();
                 document.getElementById('taskPriority').value = 'medium';
@@ -540,6 +659,7 @@
                     if (p.id == data.currentProjectId) opt.selected = true;
                     projectSelect.appendChild(opt);
                 });
+
                 if (task) {
                     modalTitle.textContent = 'Uredi zadatak';
                     document.getElementById('taskId').value = task.id;
@@ -550,10 +670,12 @@
                     document.getElementById('taskEndDate').value = task.endDate;
                     document.getElementById('taskPriority').value = task.priority || 'medium';
                     projectSelectWrapper.classList.add('hidden');
+                    renderSubtaskList(task.subtasks);
                 } else {
                     modalTitle.textContent = 'Novi zadatak';
                     document.getElementById('taskId').value = '';
                     projectSelectWrapper.classList.add('hidden');
+                    renderSubtaskList([]);
                 }
                 if (presetStatus) {
                     document.getElementById('taskStatusPreset').value = presetStatus;
@@ -563,6 +685,7 @@
 
                 openModal(taskModal, taskModalContent);
             };
+            
             const showConfirmModal = (title, message, onConfirm) => {
                 confirmTitle.textContent = title;
                 confirmMessage.innerHTML = message;
@@ -629,11 +752,15 @@
                 if (projectName) {
                     if (projectId) {
                         const project = data.projects.find(p => p.id == projectId);
-                        if (project) project.name = projectName;
+                        if (project) {
+                             logActivity(`Projekt "${project.name}" je preimenovan u "${projectName}".`);
+                             project.name = projectName;
+                        }
                     } else {
                         const newId = data.projects.length > 0 ? Math.max(...data.projects.map(p => p.id)) + 1 : 1;
-                        data.projects.push({ id: newId, name: projectName, tasks: [] });
+                        data.projects.push({ id: newId, name: projectName, tasks: [], activityLog: [] });
                         data.currentProjectId = newId;
+                        logActivity(`Kreiran je novi projekt "${projectName}".`);
                     }
                     saveData();
                     renderProjects();
@@ -678,6 +805,24 @@
                     }
                 }
                 
+                let subtaskHtml = '';
+                if (task.subtasks && task.subtasks.length > 0) {
+                    const completed = task.subtasks.filter(st => st.completed).length;
+                    const total = task.subtasks.length;
+                    const progress = total > 0 ? (completed / total) * 100 : 0;
+                    subtaskHtml = `
+                        <div class="mt-3">
+                            <div class="flex justify-between items-center text-xs text-slate-500 mb-1">
+                                <span class="font-semibold"><i class="fas fa-check-square mr-1.5"></i>Podzadaci</span>
+                                <span>${completed}/${total}</span>
+                            </div>
+                            <div class="w-full bg-slate-200 rounded-full h-1.5">
+                                <div class="bg-indigo-500 h-1.5 rounded-full" style="width: ${progress}%"></div>
+                            </div>
+                        </div>
+                    `;
+                }
+
                 card.className = `task-card p-4 rounded-lg shadow-sm border ${cardBgClass} ${hoverBgClass} ${priorityInfo.border} border-l-4`;
                 const assigneeInitial = task.assignee ? task.assignee.charAt(0).toUpperCase() : '?';
 
@@ -702,6 +847,7 @@
                         </div>
                     </div>
                     <p class="text-sm text-slate-600 my-2">${task.description.substring(0, 100)}${task.description.length > 100 ? '...' : ''}</p>
+                    ${subtaskHtml}
                     <div class="mt-4 pt-3 border-t border-slate-100 flex justify-between items-center gap-2 flex-wrap">
                         <div class="flex items-center gap-2">
                             <div title="${task.assignee || 'Nedodijeljeno'}" class="h-7 w-7 rounded-full bg-indigo-100 text-indigo-600 font-bold text-sm flex items-center justify-center flex-shrink-0">${assigneeInitial}</div>
@@ -803,6 +949,12 @@
                                 done: { icon: 'fa-check-circle', color: 'text-emerald-500'}
                             };
                             const statusIconInfo = statusIcons[task.status];
+                             let subtaskInfo = '';
+                            if(task.subtasks && task.subtasks.length > 0) {
+                                const completed = task.subtasks.filter(st => st.completed).length;
+                                subtaskInfo = `<span class="text-xs font-semibold text-slate-500 ml-2">(${completed}/${task.subtasks.length})</span>`;
+                            }
+
 
                             return `
                                 <tr class="bg-white border-b border-slate-200 hover:bg-slate-50">
@@ -820,7 +972,7 @@
                                         </div>
                                     </td>
                                     <td class="px-4 py-4 font-medium text-slate-900">
-                                        <a href="#" class="task-title-link hover:underline" data-id="${task.id}">${task.title}</a>
+                                        <a href="#" class="task-title-link hover:underline" data-id="${task.id}">${task.title}</a> ${subtaskInfo}
                                     </td>
                                     <td class="px-4 py-4">${task.assignee}</td>
                                     <td class="px-4 py-4">${task.endDate}</td>
@@ -1064,19 +1216,29 @@
                 searchInput.addEventListener('input', () => displayWorkloadCards(searchInput.value));
                 displayWorkloadCards();
             };
+            
+            const formatTimeAgo = (timestamp) => {
+                const now = new Date();
+                const seconds = Math.floor((now - new Date(timestamp)) / 1000);
+                let interval = seconds / 31536000;
+                if (interval > 1) return `prije ${Math.floor(interval)} god.`;
+                interval = seconds / 2592000;
+                if (interval > 1) return `prije ${Math.floor(interval)} mj.`;
+                interval = seconds / 86400;
+                if (interval > 1) return `prije ${Math.floor(interval)} d.`;
+                interval = seconds / 3600;
+                if (interval > 1) return `prije ${Math.floor(interval)} h`;
+                interval = seconds / 60;
+                if (interval > 1) return `prije ${Math.floor(interval)} min.`;
+                return `upravo sada`;
+            };
 
             const renderDashboard = () => {
                 const project = getCurrentProject();
                 const tasks = project ? project.tasks || [] : [];
                 
-                if (tasks.length === 0) {
-                    dashboardView.innerHTML = '<div class="text-center py-16 text-slate-500">Nema zadataka za prikaz nadzorne ploče.</div>';
-                    return;
-                }
-
-                // Restore dashboard HTML if it was replaced by empty message
-                if(!document.getElementById('stat-card-todo')){
-                    dashboardView.innerHTML = `
+                const dashboardContent = `
+                    <!-- Stat Cards -->
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                         <div id="stat-card-todo" class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex items-center cursor-pointer hover:shadow-lg hover:border-indigo-400 transition-all duration-300">
                             <div class="p-4 bg-red-100 rounded-lg mr-5"><i class="fas fa-list-check text-2xl text-red-500"></i></div><div><p class="text-sm font-medium text-slate-500">Za obaviti</p><p id="todo-count" class="text-3xl font-bold text-slate-800">0</p></div>
@@ -1088,22 +1250,38 @@
                             <div class="p-4 bg-emerald-100 rounded-lg mr-5"><i class="fas fa-check-double text-2xl text-emerald-500"></i></div><div><p class="text-sm font-medium text-slate-500">Gotovo</p><p id="done-count" class="text-3xl font-bold text-slate-800">0</p></div>
                         </div>
                     </div>
+                    <!-- Progress Bar -->
                     <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
                         <div class="flex justify-between items-center mb-2"><h3 class="font-bold text-slate-800">Napredak projekta</h3><span id="progress-percentage" class="text-lg font-bold text-slate-600">0%</span></div>
                         <div class="w-full bg-red-200 rounded-full h-4"><div id="progress-bar-done" class="bg-emerald-500 h-4 rounded-full transition-all duration-500" style="width: 0%"></div></div>
                     </div>
+                    <!-- Charts -->
                     <div class="grid grid-cols-1 lg:grid-cols-5 gap-6">
                         <div class="lg:col-span-2 bg-white p-6 rounded-xl shadow-sm border border-slate-200"><h3 class="font-bold text-slate-800 mb-4">Zaduženja po članu tima</h3><div class="relative h-64"><canvas id="assigneePieChart"></canvas></div></div>
                         <div class="lg:col-span-3 bg-white p-6 rounded-xl shadow-sm border border-slate-200"><h3 class="font-bold text-slate-800 mb-4">Napredak članova tima (%)</h3><div class="relative h-64"><canvas id="assigneeBarChart"></canvas></div></div>
                     </div>
-                    <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                        <h3 class="font-bold text-slate-800 mb-4">Pregled rokova</h3>
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <div><h4 class="font-semibold text-amber-600 mb-3"><i class="fas fa-hourglass-half mr-2"></i>Uskoro istječe rok</h4><ul id="due-soon-list" class="space-y-2 text-sm"></ul></div>
-                            <div><h4 class="font-semibold text-red-600 mb-3"><i class="fas fa-exclamation-circle mr-2"></i>Rok premašen</h4><ul id="overdue-list" class="space-y-2 text-sm"></ul></div>
+                     <!-- Deadlines & Activity -->
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                            <h3 class="font-bold text-slate-800 mb-4">Pregled rokova</h3>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div><h4 class="font-semibold text-amber-600 mb-3"><i class="fas fa-hourglass-half mr-2"></i>Uskoro istječe rok</h4><ul id="due-soon-list" class="space-y-2 text-sm"></ul></div>
+                                <div><h4 class="font-semibold text-red-600 mb-3"><i class="fas fa-exclamation-circle mr-2"></i>Rok premašen</h4><ul id="overdue-list" class="space-y-2 text-sm"></ul></div>
+                            </div>
+                        </div>
+                        <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                            <h3 class="font-bold text-slate-800 mb-4">Dnevnik aktivnosti</h3>
+                            <div id="activity-log-container" class="space-y-4 max-h-48 overflow-y-auto pr-2"></div>
                         </div>
                     </div>`;
+
+                if (tasks.length === 0) {
+                    dashboardView.innerHTML = '<div class="text-center py-16 text-slate-500">Nema zadataka za prikaz nadzorne ploče.</div>';
+                    return;
                 }
+                
+                dashboardView.innerHTML = dashboardContent;
+
 
                 // --- 1. Izračun statistike ---
                 const stats = tasks.reduce((acc, task) => {
@@ -1146,6 +1324,27 @@
                 };
                 renderDeadlineList(document.getElementById('due-soon-list'), dueSoonTasks);
                 renderDeadlineList(document.getElementById('overdue-list'), overdueTasks);
+                
+                // Render Activity Log
+                const logContainer = document.getElementById('activity-log-container');
+                const activityLog = project.activityLog || [];
+
+                if (activityLog.length > 0) {
+                    logContainer.innerHTML = activityLog
+                        .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+                        .map(entry => `
+                            <div class="flex items-start text-sm">
+                                <i class="fas fa-history text-slate-400 mt-1 mr-3"></i>
+                                <div>
+                                    <p class="text-slate-700">${entry.message}</p>
+                                    <p class="text-xs text-slate-500">${formatTimeAgo(entry.timestamp)}</p>
+                                </div>
+                            </div>
+                        `).join('');
+                } else {
+                    logContainer.innerHTML = '<p class="text-slate-500 text-center py-4">Nema aktivnosti za prikaz.</p>';
+                }
+
 
                 // --- 3. Crtanje grafikona ---
                 if(assigneePieChart) assigneePieChart.destroy();
@@ -1242,22 +1441,36 @@
                 e.preventDefault();
                 const id = document.getElementById('taskId').value;
                 let projectToUpdate = getCurrentProject();
+
+                 const subtaskNodes = document.querySelectorAll('#subtaskList .subtask-item');
+                const subtasks = Array.from(subtaskNodes).map(node => ({
+                    id: parseInt(node.dataset.id),
+                    text: node.querySelector('label').textContent,
+                    completed: node.querySelector('input[type="checkbox"]').checked
+                }));
+
                 const taskData = {
                     title: document.getElementById('taskTitle').value.trim(),
                     description: document.getElementById('taskDescription').value.trim(),
                     assignee: document.getElementById('taskAssignee').value.trim(),
                     startDate: document.getElementById('taskStartDate').value,
                     endDate: document.getElementById('taskEndDate').value,
-                    priority: document.getElementById('taskPriority').value
+                    priority: document.getElementById('taskPriority').value,
+                    subtasks: subtasks
                 };
+
                  if(!taskData.title || !taskData.assignee || !taskData.startDate || !taskData.endDate) {
                     alert('Molimo popunite sva obavezna polja.');
                     return;
                 }
 
                 if (id) { // Uređivanje
+                    const oldTask = projectToUpdate.tasks.find(task => task.id == id);
+                    logActivity(`${taskData.assignee} je ažurirao/la zadatak "${taskData.title}".`);
                     projectToUpdate.tasks = projectToUpdate.tasks.map(task => task.id == id ? { ...task, ...taskData } : task);
+
                 } else { // Dodavanje
+                    logActivity(`${taskData.assignee} je kreirao/la zadatak "${taskData.title}".`);
                     const newId = (projectToUpdate.tasks && projectToUpdate.tasks.length > 0) ? Math.max(...projectToUpdate.tasks.map(t => t.id)) + 1 : 1;
                     const preset = document.getElementById('taskStatusPreset').value;
                     const status = ['todo', 'inprogress', 'done'].includes(preset) ? preset : 'todo';
@@ -1313,6 +1526,44 @@
             cancelConfirmBtn.addEventListener('click', () => closeModal(confirmModal, confirmModalContent));
             confirmModal.addEventListener('click', (e) => { if (e.target === confirmModal) closeModal(confirmModal, confirmModalContent); });
 
+            infoBtn.addEventListener('click', () => openModal(infoModal, infoModalContent));
+            closeInfoBtn.addEventListener('click', () => closeModal(infoModal, infoModalContent));
+            closeInfoBtnFooter.addEventListener('click', () => closeModal(infoModal, infoModalContent));
+            infoModal.addEventListener('click', (e) => { if (e.target === infoModal) closeModal(infoModal, infoModalContent); });
+
+             // Subtask listeners
+            document.getElementById('addSubtaskBtn').addEventListener('click', () => {
+                const input = document.getElementById('newSubtaskInput');
+                const text = input.value.trim();
+                if (text) {
+                    const subtaskList = document.getElementById('subtaskList');
+                    const newId = Date.now(); // Simple unique ID for now
+                    const subtask = { id: newId, text, completed: false };
+
+                    const subtaskEl = document.createElement('div');
+                    subtaskEl.className = 'flex items-center gap-3 p-2 bg-slate-50 rounded-md subtask-item';
+                    subtaskEl.dataset.id = subtask.id;
+
+                    subtaskEl.innerHTML = `
+                        <input type="checkbox" class="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500">
+                        <label class="flex-grow text-sm text-slate-800">${subtask.text}</label>
+                        <button type="button" class="delete-subtask-btn text-slate-400 hover:text-red-600">
+                            <i class="fas fa-trash-alt"></i>
+                        </button>
+                    `;
+                    subtaskList.appendChild(subtaskEl);
+                    input.value = '';
+                }
+            });
+
+            document.getElementById('subtaskList').addEventListener('click', (e) => {
+                const deleteBtn = e.target.closest('.delete-subtask-btn');
+                if (deleteBtn) {
+                    deleteBtn.closest('.subtask-item').remove();
+                }
+            });
+
+
             // Dashboard stat cards click
             document.getElementById('stat-card-todo').addEventListener('click', () => switchView('kanban'));
             document.getElementById('stat-card-inprogress').addEventListener('click', () => switchView('kanban'));
@@ -1351,6 +1602,7 @@
                 } else if (deleteBtn) {
                     const task = findTask(deleteBtn.dataset.id);
                     if (task) showConfirmModal('Obriši zadatak', `Želite li obrisati zadatak "<b>${task.title}</b>"?`, () => {
+                        logActivity(`${task.assignee} je obrisao/la zadatak "${task.title}".`);
                         project.tasks = project.tasks.filter(t => t.id != task.id);
                         saveData(); renderCurrentView();
                     });
@@ -1363,7 +1615,9 @@
                     e.preventDefault();
                     const task = findTask(moveTaskBtn.dataset.id);
                     if (task) {
-                        task.status = moveTaskBtn.dataset.newStatus;
+                        const newStatus = moveTaskBtn.dataset.newStatus;
+                        logActivity(`${task.assignee} je pomaknuo/la zadatak "${task.title}" u "${statusLabels[newStatus]}".`);
+                        task.status = newStatus;
                         saveData(); renderCurrentView();
                     }
                 } else if (columnAddBtn) {
@@ -1403,7 +1657,9 @@
                     e.preventDefault();
                     const task = findTask(listMoveTaskBtn.dataset.id);
                     if (task) {
-                        task.status = listMoveTaskBtn.dataset.newStatus;
+                        const newStatus = listMoveTaskBtn.dataset.newStatus;
+                        logActivity(`${task.assignee} je pomaknuo/la zadatak "${task.title}" u "${statusLabels[newStatus]}".`);
+                        task.status = newStatus;
                         saveData();
                         renderCurrentView();
                     }
@@ -1421,6 +1677,9 @@
             });
 
             document.body.addEventListener('click', (e) => {
+                 if (!e.target.closest('#global-search-container')) {
+                    globalSearchResults.classList.add('hidden');
+                }
                 if (!e.target.closest('.status-menu-toggle') && !e.target.closest('.status-menu')) {
                     document.querySelectorAll('.status-menu').forEach(menu => menu.classList.add('hidden'));
                 }
@@ -1455,10 +1714,116 @@
                     const project = getCurrentProject();
                     const task = project.tasks.find(t => t.id == taskId);
                     if (task && task.status !== newStatus) {
+                         logActivity(`${task.assignee} je pomaknuo/la zadatak "${task.title}" u "${statusLabels[newStatus]}".`);
                         task.status = newStatus;
                         saveData(); renderCurrentView();
                     }
                 });
+            });
+            
+             // Global Search
+            globalSearchInput.addEventListener('input', () => {
+                const query = globalSearchInput.value.toLowerCase().trim();
+                if (query.length < 2) {
+                    globalSearchResults.innerHTML = '';
+                    globalSearchResults.classList.add('hidden');
+                    return;
+                }
+
+                const results = [];
+                data.projects.forEach(project => {
+                    (project.tasks || []).forEach(task => {
+                        if (task.title.toLowerCase().includes(query) || task.description.toLowerCase().includes(query)) {
+                            results.push({ ...task, projectName: project.name });
+                        }
+                    });
+                });
+
+                if (results.length > 0) {
+                    globalSearchResults.innerHTML = results.map(task => `
+                        <div class="p-3 hover:bg-slate-100 cursor-pointer border-b border-slate-100 search-result-item" data-task-id="${task.id}">
+                            <p class="font-semibold text-sm text-slate-800">${task.title}</p>
+                            <p class="text-xs text-slate-500">${task.projectName}</p>
+                        </div>
+                    `).join('');
+                    globalSearchResults.classList.remove('hidden');
+                } else {
+                    globalSearchResults.innerHTML = `<p class="p-3 text-sm text-slate-500">Nema rezultata.</p>`;
+                    globalSearchResults.classList.remove('hidden');
+                }
+            });
+
+            globalSearchResults.addEventListener('click', (e) => {
+                const item = e.target.closest('.search-result-item');
+                if (item) {
+                    const taskId = item.dataset.taskId;
+                    const task = findTaskByIdGlobal(taskId);
+                    if (task) {
+                        openTaskModal(task);
+                        globalSearchInput.value = '';
+                        globalSearchResults.classList.add('hidden');
+                    }
+                }
+            });
+
+            // Data Import / Export
+            exportDataBtn.addEventListener('click', () => {
+                try {
+                    const dataStr = JSON.stringify(data, null, 2);
+                    const blob = new Blob([dataStr], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    const date = new Date().toISOString().slice(0, 10);
+                    a.download = `projectflow_backup_${date}.json`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                } catch (error) {
+                    console.error("Greška pri izvozu podataka:", error);
+                    alert("Došlo je do greške pri izvozu podataka.");
+                }
+            });
+
+            importDataBtn.addEventListener('click', () => {
+                importFileInput.click();
+            });
+
+            importFileInput.addEventListener('change', (event) => {
+                const file = event.target.files[0];
+                if (!file) {
+                    return;
+                }
+
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        const importedData = JSON.parse(e.target.result);
+                        // Simple validation
+                        if (importedData && importedData.projects && importedData.currentProjectId !== undefined) {
+                             showConfirmModal(
+                                'Uvoz podataka',
+                                'Jeste li sigurni da želite uvesti nove podatke? <b>Svi trenutni podaci bit će prepisani.</b>',
+                                () => {
+                                    data = importedData;
+                                    saveData();
+                                    renderProjects();
+                                    renderCurrentView();
+                                }
+                            );
+                        } else {
+                            alert('Datoteka nije u ispravnom formatu.');
+                        }
+                    } catch (error) {
+                        console.error("Greška pri uvozu podataka:", error);
+                        alert('Došlo je do greške pri čitanju datoteke.');
+                    } finally {
+                        // Reset file input to allow importing the same file again
+                        importFileInput.value = '';
+                    }
+                };
+                reader.readAsText(file);
             });
 
             // --- Inicijalizacija ---
