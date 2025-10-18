@@ -434,7 +434,7 @@
                         <li><b>Detaljno praćenje:</b> Svaki zadatak može imati podzadatke, prioritete, zadužene osobe i rokove.</li>
                         <li><b>Transparentnost:</b> Pratite sve promjene kroz Dnevnik aktivnosti i brzo pronađite bilo koji zadatak pomoću globalne pretrage.</li>
                     </ul>
-                    <p>Aplikacija je napravljena kao osobni alat za praćenje produktivnosti i razvoja projekta.</p>
+                    <p>Aplikacija je napravljena kao demonstracija modernih web tehnologija i pohranjuje sve podatke lokalno u vašem pregledniku.</p>
                 </div>
                  <div class="mt-6 pt-4 border-t text-center text-sm text-slate-500">
                     <p>&copy; 2025 Andrej Vukić</p>
@@ -556,12 +556,12 @@
             // --- Glavne funkcije ---
             const saveData = () => { localStorage.setItem('pmoData', JSON.stringify(data)); };
             const getCurrentProject = () => data.projects.find(p => p.id == data.currentProjectId);
-            const findTaskByIdGlobal = (taskId) => {
-                for (const project of data.projects) {
+            
+            const findTaskByProjectAndId = (projectId, taskId) => {
+                const project = data.projects.find(p => p.id == projectId);
+                if (project) {
                     const task = (project.tasks || []).find(t => t.id == taskId);
-                    if (task) {
-                        return {...task};
-                    }
+                    return task || null;
                 }
                 return null;
             };
@@ -1175,7 +1175,7 @@
                          data.projects.forEach(p => {
                             (p.tasks || []).forEach(task => {
                                 if ((task.assignee || 'Nedodijeljeno') === assignee) {
-                                    allTasksForMember.push({...task, projectName: p.name});
+                                    allTasksForMember.push({...task, projectName: p.name, projectId: p.id});
                                     if(stats[task.status] !== undefined) stats[task.status]++;
                                 }
                             });
@@ -1201,7 +1201,7 @@
                                 <h4 class="font-semibold text-sm mb-2 text-slate-600">Aktivni zadaci:</h4>
                                 <div class="space-y-2 max-h-40 overflow-y-auto pr-2">
                                 ${allTasksForMember.filter(t => t.status !== 'done').map(t => `
-                                    <div class="workload-task-item text-xs p-2 rounded bg-slate-100 cursor-pointer hover:bg-slate-200 transition-colors" data-task-id="${t.id}">
+                                    <div class="workload-task-item text-xs p-2 rounded bg-slate-100 cursor-pointer hover:bg-slate-200 transition-colors" data-task-id="${t.id}" data-project-id="${t.projectId}">
                                         <p class="font-medium text-slate-800 pointer-events-none">${t.title}</p>
                                         <p class="text-slate-500 pointer-events-none">${t.projectName} &bull; Rok: ${t.endDate}</p>
                                     </div>
@@ -1671,7 +1671,9 @@
                     const task = findTask(deadlineTaskItem.dataset.taskId);
                     if (task) openTaskModal(task);
                 } else if (workloadTaskItem) {
-                    const task = findTaskByIdGlobal(workloadTaskItem.dataset.taskId);
+                    const taskId = workloadTaskItem.dataset.taskId;
+                    const projectId = workloadTaskItem.dataset.projectId;
+                    const task = findTaskByProjectAndId(projectId, taskId);
                     if (task) openTaskModal(task);
                 }
             });
@@ -1734,14 +1736,14 @@
                 data.projects.forEach(project => {
                     (project.tasks || []).forEach(task => {
                         if (task.title.toLowerCase().includes(query) || task.description.toLowerCase().includes(query)) {
-                            results.push({ ...task, projectName: project.name });
+                            results.push({ ...task, projectName: project.name, projectId: project.id });
                         }
                     });
                 });
 
                 if (results.length > 0) {
                     globalSearchResults.innerHTML = results.map(task => `
-                        <div class="p-3 hover:bg-slate-100 cursor-pointer border-b border-slate-100 search-result-item" data-task-id="${task.id}">
+                        <div class="p-3 hover:bg-slate-100 cursor-pointer border-b border-slate-100 search-result-item" data-task-id="${task.id}" data-project-id="${task.projectId}">
                             <p class="font-semibold text-sm text-slate-800">${task.title}</p>
                             <p class="text-xs text-slate-500">${task.projectName}</p>
                         </div>
@@ -1757,7 +1759,8 @@
                 const item = e.target.closest('.search-result-item');
                 if (item) {
                     const taskId = item.dataset.taskId;
-                    const task = findTaskByIdGlobal(taskId);
+                    const projectId = item.dataset.projectId;
+                    const task = findTaskByProjectAndId(projectId, taskId);
                     if (task) {
                         openTaskModal(task);
                         globalSearchInput.value = '';
