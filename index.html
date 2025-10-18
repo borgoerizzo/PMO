@@ -470,6 +470,15 @@
             // --- Glavne funkcije ---
             const saveData = () => { localStorage.setItem('pmoData', JSON.stringify(data)); };
             const getCurrentProject = () => data.projects.find(p => p.id == data.currentProjectId);
+            const findTaskByIdGlobal = (taskId) => {
+                for (const project of data.projects) {
+                    const task = (project.tasks || []).find(t => t.id == taskId);
+                    if (task) {
+                        return {...task};
+                    }
+                }
+                return null;
+            };
 
             // --- Funkcije za prikaz ---
             const renderCurrentView = () => {
@@ -1040,9 +1049,9 @@
                                 <h4 class="font-semibold text-sm mb-2 text-slate-600">Aktivni zadaci:</h4>
                                 <div class="space-y-2 max-h-40 overflow-y-auto pr-2">
                                 ${allTasksForMember.filter(t => t.status !== 'done').map(t => `
-                                    <div class="text-xs p-2 rounded bg-slate-100">
-                                        <p class="font-medium text-slate-800">${t.title}</p>
-                                        <p class="text-slate-500">${t.projectName} &bull; Rok: ${t.endDate}</p>
+                                    <div class="workload-task-item text-xs p-2 rounded bg-slate-100 cursor-pointer hover:bg-slate-200 transition-colors" data-task-id="${t.id}">
+                                        <p class="font-medium text-slate-800 pointer-events-none">${t.title}</p>
+                                        <p class="text-slate-500 pointer-events-none">${t.projectName} &bull; Rok: ${t.endDate}</p>
                                     </div>
                                 `).join('')}
                                 </div>
@@ -1334,6 +1343,7 @@
                 const listMoveTaskBtn = e.target.closest('.list-move-task-btn');
                 const taskTitleLink = e.target.closest('.task-title-link');
                 const deadlineTaskItem = e.target.closest('.deadline-task-item');
+                const workloadTaskItem = e.target.closest('.workload-task-item');
 
                 if (editBtn) {
                     const task = findTask(editBtn.dataset.id);
@@ -1403,6 +1413,9 @@
                     if (task) openTaskModal(task);
                 } else if (deadlineTaskItem) {
                     const task = findTask(deadlineTaskItem.dataset.taskId);
+                    if (task) openTaskModal(task);
+                } else if (workloadTaskItem) {
+                    const task = findTaskByIdGlobal(workloadTaskItem.dataset.taskId);
                     if (task) openTaskModal(task);
                 }
             });
