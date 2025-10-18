@@ -12,6 +12,9 @@
     <!-- Gantt Chart Library -->
     <script src="https://cdn.jsdelivr.net/npm/frappe-gantt@0.6.1/dist/frappe-gantt.min.js"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/frappe-gantt@0.6.1/dist/frappe-gantt.css">
+    <!-- Chart.js for Dashboard -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
     <!-- SheetJS for Excel export -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <style>
@@ -76,6 +79,10 @@
         }
         #sidebar.collapsed {
             width: var(--sidebar-width-collapsed);
+            overflow: visible; /* Fix for tooltips */
+        }
+        #sidebar.collapsed nav {
+            overflow: visible; /* Ensure nav doesn't clip tooltips */
         }
         #sidebar.collapsed .sidebar-text {
             display: none;
@@ -96,6 +103,34 @@
         }
         .list-view-table tr:last-child td {
              border-bottom: none;
+        }
+        /* Tooltip for collapsed sidebar */
+        #sidebar.collapsed .has-tooltip {
+            position: relative;
+        }
+        #sidebar.collapsed .has-tooltip::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            left: 100%;
+            top: 50%;
+            transform: translateY(-50%);
+            background-color: #1e293b; /* slate-800 */
+            color: #f1f5f9; /* slate-100 */
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 500;
+            white-space: nowrap;
+            z-index: 100;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.2s 0.1s;
+            pointer-events: none;
+            margin-left: 12px;
+        }
+        #sidebar.collapsed .has-tooltip:hover::after {
+            opacity: 1;
+            visibility: visible;
         }
     </style>
 </head>
@@ -118,13 +153,13 @@
                 <label class="text-xs font-semibold text-slate-400 uppercase tracking-wider px-1 sidebar-text">Projekt</label>
                 <select id="projectSelector" class="w-full mt-2 bg-slate-700 border border-slate-600 rounded-md text-sm shadow-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 p-2"></select>
                 <div class="grid grid-cols-3 gap-2 mt-3">
-                    <button id="newProjectBtn" class="bg-slate-700 hover:bg-slate-600 transition-colors p-2 rounded-md flex flex-col items-center text-xs" title="Novi projekt">
+                    <button id="newProjectBtn" class="has-tooltip bg-slate-700 hover:bg-slate-600 transition-colors p-2 rounded-md flex flex-col items-center text-xs" title="Novi projekt" data-tooltip="Novi">
                         <i class="fas fa-folder-plus mb-1"></i> <span class="sidebar-text">Novi</span>
                     </button>
-                    <button id="renameProjectBtn" class="bg-slate-700 hover:bg-slate-600 transition-colors p-2 rounded-md flex flex-col items-center text-xs" title="Preimenuj projekt">
+                    <button id="renameProjectBtn" class="has-tooltip bg-slate-700 hover:bg-slate-600 transition-colors p-2 rounded-md flex flex-col items-center text-xs" title="Preimenuj projekt" data-tooltip="Preimenuj">
                         <i class="fas fa-edit mb-1"></i> <span class="sidebar-text">Preimenuj</span>
                     </button>
-                    <button id="deleteProjectBtn" class="bg-slate-700 hover:bg-slate-600 transition-colors p-2 rounded-md flex flex-col items-center text-xs" title="Obriši projekt">
+                    <button id="deleteProjectBtn" class="has-tooltip bg-slate-700 hover:bg-slate-600 transition-colors p-2 rounded-md flex flex-col items-center text-xs" title="Obriši projekt" data-tooltip="Obriši">
                         <i class="fas fa-trash mb-1"></i> <span class="sidebar-text">Obriši</span>
                     </button>
                 </div>
@@ -132,25 +167,28 @@
 
             <nav class="flex-1 p-4 space-y-1 overflow-y-auto">
                  <label class="text-xs font-semibold text-slate-400 uppercase tracking-wider px-3 sidebar-text">Prikaz</label>
-                <button id="kanbanTab" class="view-tab w-full text-left flex items-center px-3 py-2.5 rounded-md font-medium text-sm transition-colors bg-slate-700 text-white">
+                <button id="kanbanTab" class="view-tab has-tooltip w-full text-left flex items-center px-3 py-2.5 rounded-md font-medium text-sm transition-colors bg-slate-700 text-white" data-tooltip="Kanban">
                     <i class="fas fa-grip-vertical fa-fw mr-3 w-5"></i><span class="sidebar-text">Kanban</span>
                 </button>
-                <button id="listTab" class="view-tab w-full text-left flex items-center px-3 py-2.5 rounded-md font-medium text-sm transition-colors text-slate-300 hover:bg-slate-700 hover:text-white">
+                <button id="listTab" class="view-tab has-tooltip w-full text-left flex items-center px-3 py-2.5 rounded-md font-medium text-sm transition-colors text-slate-300 hover:bg-slate-700 hover:text-white" data-tooltip="Lista">
                     <i class="fas fa-list-ul fa-fw mr-3 w-5"></i><span class="sidebar-text">Lista</span>
                 </button>
-                <button id="timelineTab" class="view-tab w-full text-left flex items-center px-3 py-2.5 rounded-md font-medium text-sm transition-colors text-slate-300 hover:bg-slate-700 hover:text-white">
-                    <i class="fas fa-chart-gantt fa-fw mr-3 w-5"></i><span class="sidebar-text">Timeline</span>
+                <button id="ganttTab" class="view-tab has-tooltip w-full text-left flex items-center px-3 py-2.5 rounded-md font-medium text-sm transition-colors text-slate-300 hover:bg-slate-700 hover:text-white" data-tooltip="Gantt">
+                    <i class="fas fa-chart-gantt fa-fw mr-3 w-5"></i><span class="sidebar-text">Gantt</span>
                 </button>
-                <button id="workloadTab" class="view-tab w-full text-left flex items-center px-3 py-2.5 rounded-md font-medium text-sm transition-colors text-slate-300 hover:bg-slate-700 hover:text-white">
+                <button id="workloadTab" class="view-tab has-tooltip w-full text-left flex items-center px-3 py-2.5 rounded-md font-medium text-sm transition-colors text-slate-300 hover:bg-slate-700 hover:text-white" data-tooltip="Workload">
                     <i class="fas fa-users fa-fw mr-3 w-5"></i><span class="sidebar-text">Workload</span>
                 </button>
-                <button id="calendarTab" class="view-tab w-full text-left flex items-center px-3 py-2.5 rounded-md font-medium text-sm transition-colors text-slate-300 hover:bg-slate-700 hover:text-white">
+                <button id="calendarTab" class="view-tab has-tooltip w-full text-left flex items-center px-3 py-2.5 rounded-md font-medium text-sm transition-colors text-slate-300 hover:bg-slate-700 hover:text-white" data-tooltip="Kalendar">
                     <i class="fas fa-calendar-days fa-fw mr-3 w-5"></i><span class="sidebar-text">Kalendar</span>
+                </button>
+                 <button id="dashboardTab" class="view-tab has-tooltip w-full text-left flex items-center px-3 py-2.5 rounded-md font-medium text-sm transition-colors text-slate-300 hover:bg-slate-700 hover:text-white" data-tooltip="Dashboard">
+                    <i class="fas fa-chart-pie fa-fw mr-3 w-5"></i><span class="sidebar-text">Dashboard</span>
                 </button>
             </nav>
 
             <div class="mt-auto p-4 border-t border-slate-700 space-y-2 flex-shrink-0">
-                <button id="exportExcelBtn" class="w-full bg-emerald-600 text-white font-semibold py-2 px-3 rounded-lg shadow-md hover:bg-emerald-700 transition duration-300 flex items-center justify-center text-sm">
+                <button id="exportExcelBtn" class="has-tooltip w-full bg-emerald-600 text-white font-semibold py-2 px-3 rounded-lg shadow-md hover:bg-emerald-700 transition duration-300 flex items-center justify-center text-sm" data-tooltip="Izvezi u Excel">
                     <i class="fas fa-file-excel mr-2"></i> <span class="sidebar-text">Izvezi u Excel</span>
                 </button>
             </div>
@@ -188,9 +226,74 @@
 
                 <!-- Other Views -->
                 <div id="list-view" class="hidden"></div>
-                <div id="timeline-view" class="hidden bg-white p-6 rounded-xl shadow-sm"></div>
+                <div id="gantt-view" class="hidden bg-white p-6 rounded-xl shadow-sm"></div>
                 <div id="workload-view" class="hidden"></div>
                 <div id="calendar-view" class="hidden bg-white p-6 rounded-xl shadow-sm"></div>
+                <div id="dashboard-view" class="hidden space-y-6">
+                    <!-- Stat Cards -->
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div id="stat-card-todo" class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex items-center cursor-pointer hover:shadow-lg hover:border-indigo-400 transition-all duration-300">
+                            <div class="p-4 bg-red-100 rounded-lg mr-5"><i class="fas fa-list-check text-2xl text-red-500"></i></div>
+                            <div>
+                                <p class="text-sm font-medium text-slate-500">Za obaviti</p>
+                                <p id="todo-count" class="text-3xl font-bold text-slate-800">0</p>
+                            </div>
+                        </div>
+                        <div id="stat-card-inprogress" class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex items-center cursor-pointer hover:shadow-lg hover:border-indigo-400 transition-all duration-300">
+                            <div class="p-4 bg-amber-100 rounded-lg mr-5"><i class="fas fa-person-digging text-2xl text-amber-500"></i></div>
+                            <div>
+                                <p class="text-sm font-medium text-slate-500">U izradi</p>
+                                <p id="inprogress-count" class="text-3xl font-bold text-slate-800">0</p>
+                            </div>
+                        </div>
+                        <div id="stat-card-done" class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex items-center cursor-pointer hover:shadow-lg hover:border-indigo-400 transition-all duration-300">
+                            <div class="p-4 bg-emerald-100 rounded-lg mr-5"><i class="fas fa-check-double text-2xl text-emerald-500"></i></div>
+                            <div>
+                                <p class="text-sm font-medium text-slate-500">Gotovo</p>
+                                <p id="done-count" class="text-3xl font-bold text-slate-800">0</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Progress Bar -->
+                    <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                        <div class="flex justify-between items-center mb-2">
+                            <h3 class="font-bold text-slate-800">Napredak projekta</h3>
+                            <span id="progress-percentage" class="text-lg font-bold text-slate-600">0%</span>
+                        </div>
+                        <div class="w-full bg-red-200 rounded-full h-4">
+                            <div id="progress-bar-done" class="bg-emerald-500 h-4 rounded-full transition-all duration-500" style="width: 0%"></div>
+                        </div>
+                    </div>
+
+                    <!-- Charts -->
+                    <div class="grid grid-cols-1 lg:grid-cols-5 gap-6">
+                        <div class="lg:col-span-2 bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                            <h3 class="font-bold text-slate-800 mb-4">Zaduženja po članu tima</h3>
+                            <div class="relative h-64"><canvas id="assigneePieChart"></canvas></div>
+                        </div>
+                        <div class="lg:col-span-3 bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                            <h3 class="font-bold text-slate-800 mb-4">Napredak članova tima (%)</h3>
+                             <div class="relative h-64"><canvas id="assigneeBarChart"></canvas></div>
+                        </div>
+                    </div>
+                    
+                    <!-- Deadlines -->
+                    <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                        <h3 class="font-bold text-slate-800 mb-4">Pregled rokova</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                                <h4 class="font-semibold text-amber-600 mb-3"><i class="fas fa-hourglass-half mr-2"></i>Uskoro istječe rok</h4>
+                                <ul id="due-soon-list" class="space-y-2 text-sm"></ul>
+                            </div>
+                            <div>
+                                <h4 class="font-semibold text-red-600 mb-3"><i class="fas fa-exclamation-circle mr-2"></i>Rok premašen</h4>
+                                <ul id="overdue-list" class="space-y-2 text-sm"></ul>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
             </div>
         </main>
     </div>
@@ -312,15 +415,16 @@
             const viewsContainer = document.getElementById('views');
             const kanbanView = document.getElementById('kanban-view');
             const listView = document.getElementById('list-view');
-            const timelineView = document.getElementById('timeline-view');
+            const ganttView = document.getElementById('gantt-view');
             const workloadView = document.getElementById('workload-view');
             const calendarView = document.getElementById('calendar-view');
+            const dashboardView = document.getElementById('dashboard-view');
             let currentView = 'kanban';
-            let gantt;
+            let gantt, assigneePieChart, assigneeBarChart;
             let calendarState = { year: new Date().getFullYear(), month: new Date().getMonth() };
             const viewTitles = {
-                kanban: 'Kanban ploča', list: 'Lista zadataka', timeline: 'Timeline projekta',
-                workload: 'Opterećenje tima', calendar: 'Kalendar projekta'
+                kanban: 'Kanban ploča', list: 'Lista zadataka', gantt: 'Gantt Chart',
+                workload: 'Opterećenje tima', calendar: 'Kalendar projekta', dashboard: 'Nadzorna ploča'
             };
             const statusLabels = { todo: 'Za obaviti', inprogress: 'U izradi', done: 'Gotovo' };
 
@@ -374,23 +478,25 @@
                 if (!project) {
                     kanbanColumns.forEach(col => col.innerHTML = '');
                     listView.innerHTML = containerIsEmpty('Odaberite ili kreirajte novi projekt za početak.');
-                    timelineView.innerHTML = containerIsEmpty('Nema odabranog projekta.');
+                    ganttView.innerHTML = containerIsEmpty('Nema odabranog projekta.');
                     workloadView.innerHTML = containerIsEmpty('Nema odabranog projekta.');
                     calendarView.innerHTML = containerIsEmpty('Nema odabranog projekta.');
+                    dashboardView.innerHTML = containerIsEmpty('Nema odabranog projekta.');
                     return;
                 }
 
                 if (currentView === 'kanban') renderBoard();
                 else if (currentView === 'list') renderTaskList();
-                else if (currentView === 'timeline') renderTimeline();
+                else if (currentView === 'gantt') renderTimeline();
                 else if (currentView === 'workload') renderWorkload();
                 else if (currentView === 'calendar') renderCalendar();
+                else if (currentView === 'dashboard') renderDashboard();
             };
 
             const switchView = (viewName) => {
                 currentView = viewName;
                 viewTitle.textContent = viewTitles[viewName] || 'Upravljačka ploča';
-                [kanbanView, listView, timelineView, workloadView, calendarView].forEach(v => v.classList.add('hidden'));
+                [kanbanView, listView, ganttView, workloadView, calendarView, dashboardView].forEach(v => v.classList.add('hidden'));
                 document.getElementById(`${viewName}-view`).classList.remove('hidden');
                 
                 viewTabs.forEach(tab => {
@@ -729,10 +835,10 @@
 
 
             const renderTimeline = () => {
-                timelineView.innerHTML = '<svg id="gantt-chart"></svg>'; 
+                 ganttView.innerHTML = '<svg id="gantt-chart"></svg>'; 
                 const project = getCurrentProject();
                 if (!project || !project.tasks || project.tasks.length === 0) {
-                    timelineView.innerHTML = '<div class="text-center py-16 text-slate-500">Nema zadataka za prikaz.</div>';
+                    ganttView.innerHTML = '<div class="text-center py-16 text-slate-500">Nema zadataka za prikaz.</div>';
                     return;
                 }
                 const ganttTasks = project.tasks.map(task => {
@@ -740,22 +846,54 @@
                     if (task.status === 'done') progress = 100;
                     else if (task.status === 'inprogress') progress = 50;
                     return {
-                        id: String(task.id), name: task.title, start: task.startDate, end: task.endDate,
-                        progress: progress, assignee: task.assignee, custom_class: `progress-${progress}`
+                        id: String(task.id),
+                        name: task.title,
+                        start: task.startDate,
+                        end: task.endDate,
+                        progress: progress,
+                        assignee: task.assignee,
+                        custom_class: `progress-${progress}`,
+                        status: task.status
                     };
                 });
                 gantt = new Gantt("#gantt-chart", ganttTasks, {
                     header_height: 50, bar_height: 24, bar_corner_radius: 5, view_mode: 'Day',
-                    custom_popup_html: task => `
-                        <div class="gantt-popup-workload-link bg-white p-3 rounded-lg shadow-xl border border-slate-200 text-sm cursor-pointer hover:bg-slate-50" data-assignee="${task.assignee || ''}">
-                            <div class="font-bold text-slate-800 mb-2">${task.name}</div>
-                            <div class="text-xs text-slate-500 border-t pt-2 mt-2">
-                                <p><i class="fas fa-user-circle fa-fw mr-1"></i><strong>Zadužen/a:</strong> ${task.assignee || 'Nedodijeljeno'}</p>
-                                <p class="mt-1"><i class="far fa-calendar-check fa-fw mr-1"></i><strong>Rok:</strong> ${new Date(task.end).toLocaleDateString('hr-HR')}</p>
-                                <p class="text-indigo-600 text-center mt-2 font-semibold">Prikaži opterećenje <i class="fas fa-arrow-right fa-xs ml-1"></i></p>
+                    custom_popup_html: task => {
+                        const statusLabel = statusLabels[task.status] || 'Nepoznato';
+                        return `
+                        <div class="gantt-popup-container bg-white rounded-xl shadow-2xl border border-slate-200 w-64 text-slate-700" style="font-family: 'Inter', sans-serif;">
+                            <div class="p-4 border-b border-slate-100">
+                                <h4 class="font-bold text-base text-slate-800">${task.name}</h4>
+                            </div>
+                            <div class="p-4 space-y-3 text-sm">
+                                <div class="flex items-start">
+                                    <i class="fas fa-user-circle fa-fw w-5 text-slate-400 mt-0.5 mr-3"></i>
+                                    <div>
+                                        <p class="text-xs text-slate-500">Zadužen/a</p>
+                                        <p class="font-semibold">${task.assignee || 'Nedodijeljeno'}</p>
+                                    </div>
+                                </div>
+                                <div class="flex items-start">
+                                    <i class="fas fa-flag fa-fw w-5 text-slate-400 mt-0.5 mr-3"></i>
+                                    <div>
+                                        <p class="text-xs text-slate-500">Status</p>
+                                        <p class="font-semibold">${statusLabel}</p>
+                                    </div>
+                                </div>
+                                <div class="flex items-start">
+                                    <i class="far fa-calendar fa-fw w-5 text-slate-400 mt-0.5 mr-3"></i>
+                                    <div>
+                                        <p class="text-xs text-slate-500">Period</p>
+                                        <p class="font-semibold">${new Date(task.start).toLocaleDateString('hr-HR')} - ${new Date(task.end).toLocaleDateString('hr-HR')}</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="p-3 bg-slate-50 rounded-b-xl gantt-popup-workload-link cursor-pointer hover:bg-slate-100 transition-colors" data-assignee="${task.assignee || ''}">
+                                <p class="text-indigo-600 text-center text-sm font-semibold">Prikaži opterećenje <i class="fas fa-arrow-right fa-xs ml-1"></i></p>
                             </div>
                         </div>
-                    `
+                        `;
+                    }
                 });
             };
 
@@ -918,6 +1056,179 @@
                 displayWorkloadCards();
             };
 
+            const renderDashboard = () => {
+                const project = getCurrentProject();
+                const tasks = project ? project.tasks || [] : [];
+                
+                if (tasks.length === 0) {
+                    dashboardView.innerHTML = '<div class="text-center py-16 text-slate-500">Nema zadataka za prikaz nadzorne ploče.</div>';
+                    return;
+                }
+
+                // Restore dashboard HTML if it was replaced by empty message
+                if(!document.getElementById('stat-card-todo')){
+                    dashboardView.innerHTML = `
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div id="stat-card-todo" class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex items-center cursor-pointer hover:shadow-lg hover:border-indigo-400 transition-all duration-300">
+                            <div class="p-4 bg-red-100 rounded-lg mr-5"><i class="fas fa-list-check text-2xl text-red-500"></i></div><div><p class="text-sm font-medium text-slate-500">Za obaviti</p><p id="todo-count" class="text-3xl font-bold text-slate-800">0</p></div>
+                        </div>
+                        <div id="stat-card-inprogress" class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex items-center cursor-pointer hover:shadow-lg hover:border-indigo-400 transition-all duration-300">
+                            <div class="p-4 bg-amber-100 rounded-lg mr-5"><i class="fas fa-person-digging text-2xl text-amber-500"></i></div><div><p class="text-sm font-medium text-slate-500">U izradi</p><p id="inprogress-count" class="text-3xl font-bold text-slate-800">0</p></div>
+                        </div>
+                        <div id="stat-card-done" class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex items-center cursor-pointer hover:shadow-lg hover:border-indigo-400 transition-all duration-300">
+                            <div class="p-4 bg-emerald-100 rounded-lg mr-5"><i class="fas fa-check-double text-2xl text-emerald-500"></i></div><div><p class="text-sm font-medium text-slate-500">Gotovo</p><p id="done-count" class="text-3xl font-bold text-slate-800">0</p></div>
+                        </div>
+                    </div>
+                    <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                        <div class="flex justify-between items-center mb-2"><h3 class="font-bold text-slate-800">Napredak projekta</h3><span id="progress-percentage" class="text-lg font-bold text-slate-600">0%</span></div>
+                        <div class="w-full bg-red-200 rounded-full h-4"><div id="progress-bar-done" class="bg-emerald-500 h-4 rounded-full transition-all duration-500" style="width: 0%"></div></div>
+                    </div>
+                    <div class="grid grid-cols-1 lg:grid-cols-5 gap-6">
+                        <div class="lg:col-span-2 bg-white p-6 rounded-xl shadow-sm border border-slate-200"><h3 class="font-bold text-slate-800 mb-4">Zaduženja po članu tima</h3><div class="relative h-64"><canvas id="assigneePieChart"></canvas></div></div>
+                        <div class="lg:col-span-3 bg-white p-6 rounded-xl shadow-sm border border-slate-200"><h3 class="font-bold text-slate-800 mb-4">Napredak članova tima (%)</h3><div class="relative h-64"><canvas id="assigneeBarChart"></canvas></div></div>
+                    </div>
+                    <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                        <h3 class="font-bold text-slate-800 mb-4">Pregled rokova</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div><h4 class="font-semibold text-amber-600 mb-3"><i class="fas fa-hourglass-half mr-2"></i>Uskoro istječe rok</h4><ul id="due-soon-list" class="space-y-2 text-sm"></ul></div>
+                            <div><h4 class="font-semibold text-red-600 mb-3"><i class="fas fa-exclamation-circle mr-2"></i>Rok premašen</h4><ul id="overdue-list" class="space-y-2 text-sm"></ul></div>
+                        </div>
+                    </div>`;
+                }
+
+                // --- 1. Izračun statistike ---
+                const stats = tasks.reduce((acc, task) => {
+                    acc[task.status] = (acc[task.status] || 0) + 1;
+                    return acc;
+                }, { todo: 0, inprogress: 0, done: 0 });
+
+                const totalTasks = tasks.length;
+                const donePercentage = totalTasks > 0 ? Math.round((stats.done / totalTasks) * 100) : 0;
+                
+                const today = new Date(); today.setHours(0,0,0,0);
+                const dueSoonTasks = tasks.filter(t => {
+                    if(t.status === 'done') return false;
+                    const endDate = new Date(t.endDate + 'T00:00:00');
+                    const diffDays = (endDate - today) / (1000 * 60 * 60 * 24);
+                    return diffDays >= 0 && diffDays <= 3;
+                });
+                const overdueTasks = tasks.filter(t => t.status !== 'done' && new Date(t.endDate + 'T00:00:00') < today);
+                
+                const assigneeData = tasks.reduce((acc, task) => {
+                    const assignee = task.assignee || 'Nedodijeljen';
+                    if (!acc[assignee]) acc[assignee] = { total: 0, done: 0 };
+                    acc[assignee].total++;
+                    if (task.status === 'done') acc[assignee].done++;
+                    return acc;
+                }, {});
+
+                // --- 2. Ažuriranje UI elemenata ---
+                document.getElementById('todo-count').textContent = stats.todo;
+                document.getElementById('inprogress-count').textContent = stats.inprogress;
+                document.getElementById('done-count').textContent = stats.done;
+                
+                document.getElementById('progress-percentage').textContent = `${donePercentage}%`;
+                document.getElementById('progress-bar-done').style.width = `${donePercentage}%`;
+
+                const renderDeadlineList = (listEl, taskArray) => {
+                    listEl.innerHTML = taskArray.length > 0
+                        ? taskArray.map(t => `<li class="p-2 bg-slate-50 rounded-md cursor-pointer hover:bg-slate-100 deadline-task-item" data-task-id="${t.id}">${t.title} <span class="text-slate-500">- Rok: ${t.endDate}</span></li>`).join('')
+                        : `<li class="text-slate-500">Nema zadataka.</li>`;
+                };
+                renderDeadlineList(document.getElementById('due-soon-list'), dueSoonTasks);
+                renderDeadlineList(document.getElementById('overdue-list'), overdueTasks);
+
+                // --- 3. Crtanje grafikona ---
+                if(assigneePieChart) assigneePieChart.destroy();
+                if(assigneeBarChart) assigneeBarChart.destroy();
+                
+                const assigneeLabels = Object.keys(assigneeData);
+                const assigneeTotalTasks = assigneeLabels.map(l => assigneeData[l].total);
+                const assigneeDonePercentage = assigneeLabels.map(l => {
+                    const data = assigneeData[l];
+                    return data.total > 0 ? Math.round((data.done / data.total) * 100) : 0;
+                });
+                const chartColors = ['#6366f1', '#10b981', '#f59e0b', '#0ea5e9', '#ec4899', '#8b5cf6', '#14b8a6'];
+                
+                Chart.register(ChartDataLabels);
+
+                assigneePieChart = new Chart('assigneePieChart', {
+                    type: 'pie',
+                    data: { labels: assigneeLabels, datasets: [{ label: 'Zadataka', data: assigneeTotalTasks, backgroundColor: chartColors }] },
+                    options: { 
+                        responsive: true, 
+                        maintainAspectRatio: false,
+                        onClick: (evt) => {
+                            const points = assigneePieChart.getElementsAtEventForMode(evt, 'nearest', { intersect: true }, true);
+                            if (points.length) {
+                                const firstPoint = points[0];
+                                const label = assigneePieChart.data.labels[firstPoint.index];
+                                if (label && label !== 'Nedodijeljen') {
+                                    switchView('workload');
+                                    setTimeout(() => {
+                                        const searchInput = document.getElementById('workloadSearch');
+                                        if (searchInput) {
+                                            searchInput.value = label;
+                                            searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+                                        }
+                                    }, 10);
+                                }
+                            }
+                        },
+                        plugins: { 
+                            legend: { 
+                                position: 'bottom', 
+                                labels: { 
+                                    boxWidth: 12 
+                                } 
+                            },
+                            datalabels: {
+                                formatter: (value, ctx) => {
+                                    const total = ctx.chart.data.datasets[0].data.reduce((a, b) => a + b, 0);
+                                    const percentage = total > 0 ? ((value / total) * 100).toFixed(0) + '%' : '0%';
+                                    if ((value/total) * 100 < 5) return '';
+                                    return percentage;
+                                },
+                                color: '#fff',
+                                font: {
+                                    weight: 'bold',
+                                    size: 14,
+                                }
+                            }
+                        } 
+                    }
+                });
+
+                assigneeBarChart = new Chart('assigneeBarChart', {
+                    type: 'bar',
+                    data: { labels: assigneeLabels, datasets: [{ label: '% Dovršeno', data: assigneeDonePercentage, backgroundColor: chartColors[0] }] },
+                    options: { 
+                        responsive: true, 
+                        maintainAspectRatio: false, 
+                        onClick: (evt) => {
+                            const points = assigneeBarChart.getElementsAtEventForMode(evt, 'nearest', { intersect: true }, true);
+                            if (points.length) {
+                                const firstPoint = points[0];
+                                const label = assigneeBarChart.data.labels[firstPoint.index];
+                                if (label && label !== 'Nedodijeljen') {
+                                    switchView('workload');
+                                    setTimeout(() => {
+                                        const searchInput = document.getElementById('workloadSearch');
+                                        if (searchInput) {
+                                            searchInput.value = label;
+                                            searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+                                        }
+                                    }, 10);
+                                }
+                            }
+                        },
+                        scales: { y: { beginAtZero: true, max: 100 } }, 
+                        plugins: { legend: { display: false } } 
+                    }
+                });
+            };
+
+
             const handleTaskFormSubmit = (e) => {
                 e.preventDefault();
                 const id = document.getElementById('taskId').value;
@@ -993,6 +1304,11 @@
             cancelConfirmBtn.addEventListener('click', () => closeModal(confirmModal, confirmModalContent));
             confirmModal.addEventListener('click', (e) => { if (e.target === confirmModal) closeModal(confirmModal, confirmModalContent); });
 
+            // Dashboard stat cards click
+            document.getElementById('stat-card-todo').addEventListener('click', () => switchView('kanban'));
+            document.getElementById('stat-card-inprogress').addEventListener('click', () => switchView('kanban'));
+            document.getElementById('stat-card-done').addEventListener('click', () => switchView('kanban'));
+
             // Delegacija događaja
             viewsContainer.addEventListener('click', (e) => {
                 const project = getCurrentProject();
@@ -1017,6 +1333,7 @@
                 const taskStatusToggle = e.target.closest('.task-status-toggle');
                 const listMoveTaskBtn = e.target.closest('.list-move-task-btn');
                 const taskTitleLink = e.target.closest('.task-title-link');
+                const deadlineTaskItem = e.target.closest('.deadline-task-item');
 
                 if (editBtn) {
                     const task = findTask(editBtn.dataset.id);
@@ -1084,6 +1401,9 @@
                     e.preventDefault();
                     const task = findTask(taskTitleLink.dataset.id);
                     if (task) openTaskModal(task);
+                } else if (deadlineTaskItem) {
+                    const task = findTask(deadlineTaskItem.dataset.taskId);
+                    if (task) openTaskModal(task);
                 }
             });
 
@@ -1141,3 +1461,4 @@
     </script>
 </body>
 </html>
+
