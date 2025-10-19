@@ -50,16 +50,20 @@
 
         .kanban-column-body::-webkit-scrollbar,
         #activity-log-container::-webkit-scrollbar,
-        #global-search-results::-webkit-scrollbar { width: 6px; }
+        #global-search-results::-webkit-scrollbar,
+        #roadmap-timeline::-webkit-scrollbar { width: 6px; height: 6px; }
         .kanban-column-body::-webkit-scrollbar-track,
         #activity-log-container::-webkit-scrollbar-track,
-        #global-search-results::-webkit-scrollbar-track { background: transparent; }
+        #global-search-results::-webkit-scrollbar-track,
+        #roadmap-timeline::-webkit-scrollbar-track { background: transparent; }
         .kanban-column-body::-webkit-scrollbar-thumb,
         #activity-log-container::-webkit-scrollbar-thumb,
-        #global-search-results::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        #global-search-results::-webkit-scrollbar-thumb,
+        #roadmap-timeline::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
         .kanban-column-body::-webkit-scrollbar-thumb:hover,
         #activity-log-container::-webkit-scrollbar-thumb:hover,
-        #global-search-results::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        #global-search-results::-webkit-scrollbar-thumb:hover,
+        #roadmap-timeline::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
 
         /* Frappe Gantt Customizations */
         #gantt-chart .gantt .bar-wrapper.progress-100 .bar,
@@ -145,6 +149,21 @@
             text-decoration: line-through;
             color: #64748b;
         }
+        /* Tag styles */
+        .tag-pill {
+            display: inline-flex;
+            align-items: center;
+            background-color: #e0e7ff;
+            color: #4338ca;
+            padding: 2px 8px;
+            border-radius: 9999px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        .tag-pill .remove-tag {
+            margin-left: 4px;
+            cursor: pointer;
+        }
     </style>
 </head>
 <body class="bg-slate-100 text-slate-800">
@@ -186,6 +205,9 @@
                 <button id="listTab" class="view-tab has-tooltip w-full text-left flex items-center px-3 py-2.5 rounded-md font-medium text-sm transition-colors text-slate-300 hover:bg-slate-700 hover:text-white" data-tooltip="Lista">
                     <i class="fas fa-list-ul fa-fw mr-3 w-5"></i><span class="sidebar-text">Lista</span>
                 </button>
+                <button id="roadmapTab" class="view-tab has-tooltip w-full text-left flex items-center px-3 py-2.5 rounded-md font-medium text-sm transition-colors text-slate-300 hover:bg-slate-700 hover:text-white" data-tooltip="Roadmap">
+                    <i class="fas fa-route fa-fw mr-3 w-5"></i><span class="sidebar-text">Roadmap</span>
+                </button>
                 <button id="ganttTab" class="view-tab has-tooltip w-full text-left flex items-center px-3 py-2.5 rounded-md font-medium text-sm transition-colors text-slate-300 hover:bg-slate-700 hover:text-white" data-tooltip="Gantt">
                     <i class="fas fa-chart-gantt fa-fw mr-3 w-5"></i><span class="sidebar-text">Gantt</span>
                 </button>
@@ -225,6 +247,7 @@
             <header class="flex items-center justify-between h-16 px-6 border-b border-slate-200 bg-white flex-shrink-0">
                 <h2 id="viewTitle" class="text-xl font-bold text-slate-700">Kanban ploča</h2>
                 <div class="flex items-center gap-4">
+                     <div id="tag-filter-container" class="relative w-48"></div>
                     <div class="relative w-64" id="global-search-container">
                         <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><i class="fas fa-search text-slate-400"></i></div>
                         <input type="text" id="globalSearch" placeholder="Pronađi zadatak..." class="block w-full pl-10 pr-3 py-2 bg-white border border-slate-300 rounded-md shadow-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
@@ -259,6 +282,7 @@
 
                 <!-- Other Views -->
                 <div id="list-view" class="hidden"></div>
+                <div id="roadmap-view" class="hidden bg-white p-6 rounded-xl shadow-sm"></div>
                 <div id="gantt-view" class="hidden bg-white p-6 rounded-xl shadow-sm"></div>
                 <div id="workload-view" class="hidden"></div>
                 <div id="calendar-view" class="hidden bg-white p-6 rounded-xl shadow-sm"></div>
@@ -304,6 +328,11 @@
                         <div class="lg:col-span-2 bg-white p-6 rounded-xl shadow-sm border border-slate-200"><h3 class="font-bold text-slate-800 mb-4">Zaduženja po članu tima</h3><div class="relative h-64"><canvas id="assigneePieChart"></canvas></div></div>
                         <div class="lg:col-span-3 bg-white p-6 rounded-xl shadow-sm border border-slate-200"><h3 class="font-bold text-slate-800 mb-4">Napredak članova tima (%)</h3><div class="relative h-64"><canvas id="assigneeBarChart"></canvas></div></div>
                     </div>
+                     <!-- Burn-down Chart -->
+                    <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                        <h3 class="font-bold text-slate-800 mb-4">Burn-down grafikon</h3>
+                        <div class="relative h-64"><canvas id="burnDownChart"></canvas></div>
+                    </div>
                      <!-- Deadlines & Activity -->
                     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                         <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
@@ -331,10 +360,18 @@
                 <button id="cancelBtn" class="text-slate-400 hover:text-slate-600">&times;</button>
             </div>
             <form id="taskForm">
-                <input type="hidden" id="taskId"><input type="hidden" id="taskStatusPreset">
+                <input type="hidden" id="taskId"><input type="hidden" id="taskStatusPreset"><input type="hidden" id="taskProjectId">
                 <div class="space-y-4">
                     <input type="text" id="taskTitle" placeholder="Naziv zadatka" class="w-full text-lg px-3 py-2 bg-white border border-slate-300 rounded-md shadow-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500" required>
                     <textarea id="taskDescription" rows="3" placeholder="Dodajte opis..." class="w-full px-3 py-2 bg-white border border-slate-300 rounded-md shadow-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"></textarea>
+                    
+                    <!-- Tags Section -->
+                    <div class="border-t pt-4">
+                        <label for="taskTagsInput" class="block text-sm font-medium text-slate-600 mb-2">Oznake (odvojite zarezom ili razmakom)</label>
+                        <div id="tag-pills-container" class="flex flex-wrap gap-2 mb-2"></div>
+                        <input type="text" id="taskTagsInput" placeholder="npr. #bug, #marketing..." class="w-full px-3 py-2 bg-white border border-slate-300 rounded-md shadow-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+                    </div>
+
                     <div id="taskProjectSelectWrapper" class="hidden">
                         <label for="taskProjectSelect" class="block text-sm font-medium text-slate-600 mb-1">Projekt</label>
                         <select id="taskProjectSelect" class="w-full px-3 py-2 bg-white border border-slate-300 rounded-md shadow-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"></select>
@@ -369,6 +406,13 @@
                             <input type="text" id="newSubtaskInput" placeholder="Dodaj novi podzadatak..." class="flex-grow w-full px-3 py-2 bg-white border border-slate-300 rounded-md shadow-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
                             <button type="button" id="addSubtaskBtn" class="bg-slate-200 text-slate-700 font-semibold py-2 px-4 rounded-lg hover:bg-slate-300 transition">Dodaj</button>
                         </div>
+                    </div>
+                     <!-- Dependencies Section -->
+                    <div class="border-t pt-4">
+                        <label for="taskDependencies" class="block text-sm font-medium text-slate-600 mb-2">Ovisnosti (zadaci koji moraju biti završeni prije)</label>
+                        <select id="taskDependencies" multiple class="w-full h-24 px-3 py-2 bg-white border border-slate-300 rounded-md shadow-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+                            <!-- Options will be populated by JS -->
+                        </select>
                     </div>
                 </div>
                 <div class="flex justify-end space-x-4 mt-8">
@@ -488,6 +532,7 @@
             const sidebarToggle = document.getElementById('sidebarToggle');
             const globalSearchInput = document.getElementById('globalSearch');
             const globalSearchResults = document.getElementById('global-search-results');
+            const tagFilterContainer = document.getElementById('tag-filter-container');
 
 
             // View Elements
@@ -496,15 +541,17 @@
             const viewsContainer = document.getElementById('views');
             const kanbanView = document.getElementById('kanban-view');
             const listView = document.getElementById('list-view');
+            const roadmapView = document.getElementById('roadmap-view');
             const ganttView = document.getElementById('gantt-view');
             const workloadView = document.getElementById('workload-view');
             const calendarView = document.getElementById('calendar-view');
             const dashboardView = document.getElementById('dashboard-view');
             let currentView = 'kanban';
-            let gantt, assigneePieChart, assigneeBarChart;
+            let activeTagFilter = null;
+            let gantt, assigneePieChart, assigneeBarChart, burnDownChart;
             let calendarState = { year: new Date().getFullYear(), month: new Date().getMonth() };
             const viewTitles = {
-                kanban: 'Kanban ploča', list: 'Lista zadataka', gantt: 'Gantt Chart',
+                kanban: 'Kanban ploča', list: 'Lista zadataka', roadmap: 'Roadmap', gantt: 'Gantt Chart',
                 workload: 'Opterećenje tima', calendar: 'Kalendar projekta', dashboard: 'Nadzorna ploča'
             };
             const statusLabels = { todo: 'Za obaviti', inprogress: 'U izradi', done: 'Gotovo' };
@@ -537,16 +584,16 @@
                 projects: [{ 
                     id: 1, name: 'Redizajn Web Stranice', 
                     tasks: [
-                        { id: 1, title: 'Analiza tržišta', description: 'Istražiti konkurenciju i ciljanu publiku.', assignee: 'Ana Anić', startDate: '2025-10-20', endDate: '2025-10-25', status: 'done', priority: 'high', subtasks: [] },
+                        { id: 1, title: 'Analiza tržišta', description: 'Istražiti konkurenciju i ciljanu publiku.', assignee: 'Ana Anić', startDate: '2025-10-20', endDate: '2025-10-25', status: 'done', priority: 'high', subtasks: [], dependencies: [], tags: ["#analiza", "#istraživanje"] },
                         { id: 2, title: 'Izrada wireframea', description: 'Definirati strukturu i layout stranice.', assignee: 'Ivan Ivić', startDate: '2025-10-22', endDate: '2025-10-28', status: 'inprogress', priority: 'medium', subtasks: [
                             {id: 1, text: 'Homepage wireframe', completed: true},
                             {id: 2, text: 'About Us wireframe', completed: false},
                             {id: 3, text: 'Contact page wireframe', completed: false}
-                        ] },
-                        { id: 3, title: 'Dizajn korisničkog sučelja', description: 'Kreirati vizualni identitet i komponente.', assignee: 'Ana Anić', startDate: '2025-10-25', endDate: '2025-11-05', status: 'inprogress', priority: 'high', subtasks: [] },
-                        { id: 4, title: 'Frontend razvoj', description: 'Implementirati dizajn u HTML/CSS/JS.', assignee: 'Marko Markić', startDate: '2025-11-01', endDate: '2025-11-15', status: 'todo', priority: 'high', subtasks: [] },
-                        { id: 5, title: 'Backend integracija', description: 'Povezati frontend s CMS-om.', assignee: 'Petra Petrić', startDate: '2025-11-10', endDate: '2025-11-25', status: 'todo', priority: 'medium', subtasks: []},
-                        { id: 6, title: 'Testiranje i ispravci', description: 'Osigurati funkcionalnost i responzivnost.', assignee: 'Ivan Ivić', startDate: '2025-11-26', endDate: '2025-11-30', status: 'todo', priority: 'low', subtasks: [] }
+                        ], dependencies: [1], tags: ["#dizajn", "#UX"] },
+                        { id: 3, title: 'Dizajn korisničkog sučelja', description: 'Kreirati vizualni identitet i komponente.', assignee: 'Ana Anić', startDate: '2025-10-25', endDate: '2025-11-05', status: 'inprogress', priority: 'high', subtasks: [], dependencies: [2], tags: ["#dizajn", "#UI"] },
+                        { id: 4, title: 'Frontend razvoj', description: 'Implementirati dizajn u HTML/CSS/JS.', assignee: 'Marko Markić', startDate: '2025-11-01', endDate: '2025-11-15', status: 'todo', priority: 'high', subtasks: [], dependencies: [3], tags: ["#razvoj", "#frontend"] },
+                        { id: 5, title: 'Backend integracija', description: 'Povezati frontend s CMS-om.', assignee: 'Petra Petrić', startDate: '2025-11-10', endDate: '2025-11-25', status: 'todo', priority: 'medium', subtasks: [], dependencies: [4], tags: ["#razvoj", "#backend"]},
+                        { id: 6, title: 'Testiranje i ispravci', description: 'Osigurati funkcionalnost i responzivnost.', assignee: 'Ivan Ivić', startDate: '2025-11-26', endDate: '2025-11-30', status: 'todo', priority: 'low', subtasks: [], dependencies: [4, 5], tags: ["#testiranje", "#bug"] }
                     ],
                     activityLog: []
                 }],
@@ -561,7 +608,8 @@
                 const project = data.projects.find(p => p.id == projectId);
                 if (project) {
                     const task = (project.tasks || []).find(t => t.id == taskId);
-                    return task || null;
+                    // Return a copy to avoid direct mutation
+                    return task ? {...task, projectId: project.id} : null;
                 }
                 return null;
             };
@@ -581,9 +629,10 @@
 
             // --- Funkcije za prikaz ---
             const renderCurrentView = () => {
+                renderTagFilter();
                 const project = getCurrentProject();
                 const containerIsEmpty = (html) => `<div class="text-center py-16 text-slate-500">${html}</div>`;
-                if (!project) {
+                if (!project && currentView !== 'roadmap') {
                     kanbanColumns.forEach(col => col.innerHTML = '');
                     listView.innerHTML = containerIsEmpty('Odaberite ili kreirajte novi projekt za početak.');
                     ganttView.innerHTML = containerIsEmpty('Nema odabranog projekta.');
@@ -595,6 +644,7 @@
 
                 if (currentView === 'kanban') renderBoard();
                 else if (currentView === 'list') renderTaskList();
+                else if (currentView === 'roadmap') renderRoadmap();
                 else if (currentView === 'gantt') renderTimeline();
                 else if (currentView === 'workload') renderWorkload();
                 else if (currentView === 'calendar') renderCalendar();
@@ -604,7 +654,7 @@
             const switchView = (viewName) => {
                 currentView = viewName;
                 viewTitle.textContent = viewTitles[viewName] || 'Upravljačka ploča';
-                [kanbanView, listView, ganttView, workloadView, calendarView, dashboardView].forEach(v => v.classList.add('hidden'));
+                [kanbanView, listView, roadmapView, ganttView, workloadView, calendarView, dashboardView].forEach(v => v.classList.add('hidden'));
                 document.getElementById(`${viewName}-view`).classList.remove('hidden');
                 
                 viewTabs.forEach(tab => {
@@ -663,6 +713,7 @@
                 if (task) {
                     modalTitle.textContent = 'Uredi zadatak';
                     document.getElementById('taskId').value = task.id;
+                    document.getElementById('taskProjectId').value = task.projectId || getCurrentProject().id;
                     document.getElementById('taskTitle').value = task.title;
                     document.getElementById('taskDescription').value = task.description;
                     document.getElementById('taskAssignee').value = task.assignee;
@@ -671,17 +722,38 @@
                     document.getElementById('taskPriority').value = task.priority || 'medium';
                     projectSelectWrapper.classList.add('hidden');
                     renderSubtaskList(task.subtasks);
+                    renderTagPills(task.tags || []);
                 } else {
                     modalTitle.textContent = 'Novi zadatak';
                     document.getElementById('taskId').value = '';
                     projectSelectWrapper.classList.add('hidden');
                     renderSubtaskList([]);
+                    renderTagPills([]);
                 }
                 if (presetStatus) {
                     document.getElementById('taskStatusPreset').value = presetStatus;
                 } else {
                     document.getElementById('taskStatusPreset').value = '';
                 }
+
+                // Populate dependencies
+                const taskDependenciesSelect = document.getElementById('taskDependencies');
+                taskDependenciesSelect.innerHTML = '';
+                const projectForDependencies = data.projects.find(p => p.id == (task?.projectId || getCurrentProject().id));
+                
+                if (projectForDependencies && projectForDependencies.tasks) {
+                    projectForDependencies.tasks.forEach(t => {
+                        if (task && t.id == task.id) return; // Can't depend on itself
+                        const option = document.createElement('option');
+                        option.value = t.id;
+                        option.textContent = `(#${t.id}) ${t.title}`;
+                        if (task && task.dependencies && task.dependencies.includes(t.id)) {
+                            option.selected = true;
+                        }
+                        taskDependenciesSelect.appendChild(option);
+                    });
+                }
+
 
                 openModal(taskModal, taskModalContent);
             };
@@ -823,6 +895,13 @@
                     `;
                 }
 
+                let tagsHtml = '';
+                if (task.tags && task.tags.length > 0) {
+                    tagsHtml = `<div class="mt-3 flex flex-wrap gap-2">
+                        ${task.tags.map(tag => `<span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-100 text-blue-800">${tag}</span>`).join('')}
+                    </div>`;
+                }
+
                 card.className = `task-card p-4 rounded-lg shadow-sm border ${cardBgClass} ${hoverBgClass} ${priorityInfo.border} border-l-4`;
                 const assigneeInitial = task.assignee ? task.assignee.charAt(0).toUpperCase() : '?';
 
@@ -848,6 +927,7 @@
                     </div>
                     <p class="text-sm text-slate-600 my-2">${task.description.substring(0, 100)}${task.description.length > 100 ? '...' : ''}</p>
                     ${subtaskHtml}
+                    ${tagsHtml}
                     <div class="mt-4 pt-3 border-t border-slate-100 flex justify-between items-center gap-2 flex-wrap">
                         <div class="flex items-center gap-2">
                             <div title="${task.assignee || 'Nedodijeljeno'}" class="h-7 w-7 rounded-full bg-indigo-100 text-indigo-600 font-bold text-sm flex items-center justify-center flex-shrink-0">${assigneeInitial}</div>
@@ -872,10 +952,11 @@
             };
 
             const renderBoard = () => {
-                kanbanColumns.forEach(col => col.innerHTML = '');
                 const project = getCurrentProject();
-                if (!project || !project.tasks) return;
-                project.tasks.forEach(task => {
+                const tasks = activeTagFilter ? (project.tasks || []).filter(t => t.tags && t.tags.includes(activeTagFilter)) : (project.tasks || []);
+                
+                kanbanColumns.forEach(col => col.innerHTML = '');
+                tasks.forEach(task => {
                     const card = createTaskCard(task);
                     const column = document.querySelector(`.kanban-column-body[data-status="${task.status}"]`);
                     if(column) column.appendChild(card);
@@ -885,7 +966,10 @@
             const renderTaskList = () => {
                 const project = getCurrentProject();
                 listView.innerHTML = ''; 
-                if (!project || !project.tasks || project.tasks.length === 0) {
+                
+                const tasks = activeTagFilter ? (project.tasks || []).filter(t => t.tags && t.tags.includes(activeTagFilter)) : (project.tasks || []);
+                
+                if (!tasks || tasks.length === 0) {
                     listView.innerHTML = '<div class="text-center py-16 text-slate-500">Nema zadataka za prikaz.</div>';
                     return;
                 }
@@ -899,7 +983,8 @@
                 ];
 
                 categories.forEach(category => {
-                    const tasksInCategory = project.tasks.filter(t => t.status === category.status);
+                    const tasksInCategory = tasks.filter(t => t.status === category.status);
+                    if (tasksInCategory.length === 0 && activeTagFilter) return; // Hide empty categories when filtering
                     const isCollapsed = listCategoryState[category.status] || false;
 
                     const categoryWrapper = document.createElement('div');
@@ -927,6 +1012,7 @@
                                 <tr>
                                     <th scope="col" class="px-2 py-3 w-12">Status</th>
                                     <th scope="col" class="px-4 py-3">Naziv</th>
+                                    <th scope="col" class="px-4 py-3">Oznake</th>
                                     <th scope="col" class="px-4 py-3">Zadužen</th>
                                     <th scope="col" class="px-4 py-3">Rok</th>
                                     <th scope="col" class="px-4 py-3">Prioritet</th>
@@ -954,6 +1040,12 @@
                                 const completed = task.subtasks.filter(st => st.completed).length;
                                 subtaskInfo = `<span class="text-xs font-semibold text-slate-500 ml-2">(${completed}/${task.subtasks.length})</span>`;
                             }
+                             let tagsInfo = '';
+                            if(task.tags && task.tags.length > 0) {
+                                tagsInfo = `<div class="flex flex-wrap gap-1 mt-1">
+                                    ${task.tags.map(tag => `<span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-100 text-blue-800">${tag}</span>`).join('')}
+                                </div>`;
+                            }
 
 
                             return `
@@ -972,7 +1064,8 @@
                                         </div>
                                     </td>
                                     <td class="px-4 py-4 font-medium text-slate-900">
-                                        <a href="#" class="task-title-link hover:underline" data-id="${task.id}">${task.title}</a> ${subtaskInfo}
+                                        <div><a href="#" class="task-title-link hover:underline" data-id="${task.id}">${task.title}</a> ${subtaskInfo}</div>
+                                        ${tagsInfo}
                                     </td>
                                     <td class="px-4 py-4">${task.assignee}</td>
                                     <td class="px-4 py-4">${task.endDate}</td>
@@ -993,16 +1086,106 @@
                     listView.appendChild(categoryWrapper);
                 });
             };
+            
+            const renderRoadmap = () => {
+                roadmapView.innerHTML = `
+                    <div id="roadmap-container" class="space-y-4">
+                        <div id="roadmap-header" class="grid grid-cols-8 text-center font-bold text-sm text-slate-600 sticky top-0 bg-white/70 backdrop-blur-sm z-10 py-2 rounded-t-lg">
+                            <!-- Quarters will be generated here -->
+                        </div>
+                        <div id="roadmap-timeline" class="relative overflow-x-auto">
+                            <!-- Projects will be generated here -->
+                        </div>
+                    </div>
+                `;
+
+                if (data.projects.length === 0) {
+                    roadmapView.innerHTML = '<div class="text-center py-16 text-slate-500">Nema projekata za prikaz.</div>';
+                    return;
+                }
+
+                const today = new Date();
+                const currentYear = today.getFullYear();
+                const years = [currentYear, currentYear + 1];
+                let totalDays = 0;
+                let quarterHeaders = '';
+                
+                const headerContainer = document.getElementById('roadmap-header');
+                const timelineContainer = document.getElementById('roadmap-timeline');
+
+                years.forEach(year => {
+                    for (let q = 1; q <= 4; q++) {
+                        const daysInQuarter = (new Date(year, q * 3, 0)).getDate();
+                        quarterHeaders += `<div class="col-span-1 border-r border-slate-200 py-2">Q${q} ${year}</div>`;
+                    }
+                });
+                // We show 8 quarters (2 years)
+                totalDays = (new Date(currentYear + 2, 0, 0) - new Date(currentYear, 0, 1)) / (1000 * 60 * 60 * 24);
+                headerContainer.innerHTML = quarterHeaders;
+                timelineContainer.style.height = `${data.projects.length * 5}rem`;
+
+                const palette = [
+                    { bg: 'bg-indigo-200', fill: 'bg-indigo-500' },
+                    { bg: 'bg-emerald-200', fill: 'bg-emerald-500' },
+                    { bg: 'bg-amber-200', fill: 'bg-amber-500' },
+                    { bg: 'bg-sky-200', fill: 'bg-sky-500' },
+                    { bg: 'bg-pink-200', fill: 'bg-pink-500' },
+                    { bg: 'bg-purple-200', fill: 'bg-purple-500' },
+                    { bg: 'bg-teal-200', fill: 'bg-teal-500' }
+                ];
+
+                let projectsHtml = '';
+                data.projects.forEach((project, index) => {
+                    const tasks = project.tasks || [];
+                    if (tasks.length === 0) return;
+
+                    const startDates = tasks.map(t => new Date(t.startDate));
+                    const endDates = tasks.map(t => new Date(t.endDate));
+                    const projectStart = new Date(Math.min(...startDates));
+                    const projectEnd = new Date(Math.max(...endDates));
+                    
+                    const completedTasks = tasks.filter(t => t.status === 'done').length;
+                    const progress = tasks.length > 0 ? (completedTasks / tasks.length) * 100 : 0;
+
+                    const timelineStart = new Date(currentYear, 0, 1);
+                    const offsetDays = (projectStart - timelineStart) / (1000 * 60 * 60 * 24);
+                    const durationDays = (projectEnd - projectStart) / (1000 * 60 * 60 * 24);
+                    
+                    const left = (offsetDays / totalDays) * 100;
+                    const width = (durationDays / totalDays) * 100;
+                    const color = palette[index % palette.length];
+
+                    projectsHtml += `
+                        <div class="absolute w-full" style="top: ${index * 5}rem;">
+                           <div class="flex items-center h-20">
+                                <div class="w-48 px-4 font-bold text-slate-700 truncate">${project.name}</div>
+                                <div class="flex-1 h-full border-l border-slate-200 relative">
+                                    <div class="roadmap-bar-wrapper absolute h-full flex items-center cursor-pointer" style="left: ${left}%; width: ${width}%" data-project-id="${project.id}">
+                                        <div class="h-10 w-full ${color.bg} rounded-lg relative overflow-hidden">
+                                             <div class="h-full ${color.fill}" style="width: ${progress}%"></div>
+                                             <span class="absolute inset-0 flex items-center justify-center text-xs font-bold text-white">${Math.round(progress)}%</span>
+                                        </div>
+                                    </div>
+                                </div>
+                           </div>
+                        </div>
+                    `;
+                });
+                timelineContainer.innerHTML = projectsHtml;
+
+            };
 
 
             const renderTimeline = () => {
                  ganttView.innerHTML = '<svg id="gantt-chart"></svg>'; 
                 const project = getCurrentProject();
-                if (!project || !project.tasks || project.tasks.length === 0) {
+                const tasks = activeTagFilter ? (project.tasks || []).filter(t => t.tags && t.tags.includes(activeTagFilter)) : (project.tasks || []);
+
+                if (!tasks || tasks.length === 0) {
                     ganttView.innerHTML = '<div class="text-center py-16 text-slate-500">Nema zadataka za prikaz.</div>';
                     return;
                 }
-                const ganttTasks = project.tasks.map(task => {
+                const ganttTasks = tasks.map(task => {
                     let progress = 0;
                     if (task.status === 'done') progress = 100;
                     else if (task.status === 'inprogress') progress = 50;
@@ -1013,6 +1196,7 @@
                         end: task.endDate,
                         progress: progress,
                         assignee: task.assignee,
+                        dependencies: (task.dependencies || []).join(','),
                         custom_class: `progress-${progress}`,
                         status: task.status
                     };
@@ -1151,13 +1335,15 @@
                 const searchInput = document.getElementById('workloadSearch');
 
                 const project = getCurrentProject();
-                if (!project || !project.tasks || project.tasks.length === 0) {
+                const tasks = activeTagFilter ? (project.tasks || []).filter(t => t.tags && t.tags.includes(activeTagFilter)) : (project.tasks || []);
+
+                if (!project || tasks.length === 0) {
                     container.innerHTML = '<div class="text-center py-16 text-slate-500 col-span-full">Nema članova tima na ovom projektu.</div>';
                     searchInput.disabled = true;
                     return;
                 }
                 
-                const teamMembers = [...new Set(project.tasks.map(task => task.assignee || 'Nedodijeljeno').filter(Boolean))].sort();
+                const teamMembers = [...new Set(tasks.map(task => task.assignee || 'Nedodijeljeno').filter(Boolean))].sort();
 
                 const displayWorkloadCards = (filter = '') => {
                     container.innerHTML = '';
@@ -1235,7 +1421,7 @@
 
             const renderDashboard = () => {
                 const project = getCurrentProject();
-                const tasks = project ? project.tasks || [] : [];
+                const tasks = activeTagFilter ? (project.tasks || []).filter(t => t.tags && t.tags.includes(activeTagFilter)) : (project.tasks || []);
                 
                 const dashboardContent = `
                     <!-- Stat Cards -->
@@ -1260,6 +1446,11 @@
                         <div class="lg:col-span-2 bg-white p-6 rounded-xl shadow-sm border border-slate-200"><h3 class="font-bold text-slate-800 mb-4">Zaduženja po članu tima</h3><div class="relative h-64"><canvas id="assigneePieChart"></canvas></div></div>
                         <div class="lg:col-span-3 bg-white p-6 rounded-xl shadow-sm border border-slate-200"><h3 class="font-bold text-slate-800 mb-4">Napredak članova tima (%)</h3><div class="relative h-64"><canvas id="assigneeBarChart"></canvas></div></div>
                     </div>
+                     <!-- Burn-down Chart -->
+                    <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                        <h3 class="font-bold text-slate-800 mb-4">Burn-down grafikon</h3>
+                        <div class="relative h-64"><canvas id="burnDownChart"></canvas></div>
+                    </div>
                      <!-- Deadlines & Activity -->
                     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                         <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
@@ -1281,6 +1472,11 @@
                 }
                 
                 dashboardView.innerHTML = dashboardContent;
+
+                // Add event listeners for stat cards
+                document.getElementById('stat-card-todo').addEventListener('click', () => switchView('kanban'));
+                document.getElementById('stat-card-inprogress').addEventListener('click', () => switchView('kanban'));
+                document.getElementById('stat-card-done').addEventListener('click', () => switchView('kanban'));
 
 
                 // --- 1. Izračun statistike ---
@@ -1349,6 +1545,7 @@
                 // --- 3. Crtanje grafikona ---
                 if(assigneePieChart) assigneePieChart.destroy();
                 if(assigneeBarChart) assigneeBarChart.destroy();
+                if(burnDownChart) burnDownChart.destroy();
                 
                 const assigneeLabels = Object.keys(assigneeData);
                 const assigneeTotalTasks = assigneeLabels.map(l => assigneeData[l].total);
@@ -1431,16 +1628,143 @@
                             }
                         },
                         scales: { y: { beginAtZero: true, max: 100 } }, 
-                        plugins: { legend: { display: false } } 
+                        plugins: { 
+                            legend: { display: false },
+                            datalabels: {
+                                anchor: 'center',
+                                align: 'center',
+                                color: '#fff',
+                                font: {
+                                    weight: 'bold'
+                                },
+                                formatter: (value) => value > 0 ? value + '%' : ''
+                            }
+                        } 
                     }
                 });
+                
+                // --- 4. Burn-down Chart ---
+                const burnDownCanvas = document.getElementById('burnDownChart');
+                if (burnDownCanvas) {
+                    const tasksWithDates = tasks.filter(t => t.startDate && t.endDate);
+                    if (tasksWithDates.length > 1) {
+                        const allStartDates = tasksWithDates.map(t => new Date(t.startDate));
+                        const allEndDates = tasksWithDates.map(t => new Date(t.endDate));
+
+                        const projectStartDate = new Date(Math.min.apply(null, allStartDates));
+                        const projectEndDate = new Date(Math.max.apply(null, allEndDates));
+                        
+                        projectStartDate.setHours(0,0,0,0);
+                        projectEndDate.setHours(0,0,0,0);
+
+                        let labels = [];
+                        let idealData = [];
+                        let actualData = [];
+                        const totalTasks = tasks.length;
+                        const durationDays = Math.ceil((projectEndDate - projectStartDate) / (1000 * 60 * 60 * 24)) + 1;
+                        const idealBurnPerDay = durationDays > 1 ? totalTasks / (durationDays - 1) : totalTasks;
+                        
+                        const completionsByDate = {};
+                        if (project.activityLog) {
+                            project.activityLog
+                                .filter(entry => entry.message.includes('u "Gotovo"'))
+                                .forEach(entry => {
+                                    const d = new Date(entry.timestamp);
+                                    d.setHours(0, 0, 0, 0);
+                                    const dateString = d.toISOString().split('T')[0];
+                                    completionsByDate[dateString] = (completionsByDate[dateString] || 0) + 1;
+                                });
+                        }
+
+                        let remainingTasks = totalTasks;
+                        const today = new Date();
+                        today.setHours(0,0,0,0);
+
+                        for (let i = 0; i < durationDays; i++) {
+                            const currentDate = new Date(projectStartDate);
+                            currentDate.setDate(projectStartDate.getDate() + i);
+                            const dateString = currentDate.toISOString().split('T')[0];
+                            
+                            labels.push(currentDate.toLocaleDateString('hr-HR', { day: 'numeric', month: 'short' }));
+                            idealData.push(Math.round(Math.max(0, totalTasks - (i * idealBurnPerDay))));
+                            
+                            if (currentDate <= today) {
+                                if (completionsByDate[dateString]) {
+                                    remainingTasks -= completionsByDate[dateString];
+                                }
+                                actualData.push(remainingTasks);
+                            }
+                        }
+
+                        const isProjectComplete = totalTasks > 0 && remainingTasks === 0 && actualData.length > 0;
+
+                        // Icon for completed project
+                        const trophyIcon = new Image(20, 20);
+                        trophyIcon.src = 'data:image/svg+xml;base64,' + btoa('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512" fill="#f59e0b"><path d="M552 64H448V48C448 21.5 426.5 0 400 0H176c-26.5 0-48 21.5-48 48v16H24C10.7 64 0 74.7 0 88v32c0 13.3 10.7 24 24 24h13.2L65 481.3c2.4 21.3 20.3 37.4 41.8 38.6C129.5 523.5 160 493.1 160 456c0-11.8-3.1-22.7-8.6-32H128c-17.7 0-32-14.3-32-32s14.3-32 32-32h32.6c2.8-14.8 8.8-28.1 16.9-39.4C180.3 320 188.5 320 192 320h192c3.5 0 11.7 0 14.6 1.4c8.1 11.4 14.1 24.6 16.9 39.4H448c17.7 0 32 14.3 32 32s-14.3 32-32 32h-31.4c-5.5 9.3-8.6 20.2-8.6 32c0 37.1 30.5 67.5 52.8 71.9c21.5 1.2 39.4-14.7 41.8-38.6L538.8 144H552c13.3 0 24-10.7 24-24V88c0-13.3-10.7-24-24-24zM192 64h192v64H192V64z"/></svg>');
+                        
+                        let pointStyles = new Array(actualData.length).fill('circle');
+                        let completionIndex = -1;
+                        if (isProjectComplete) {
+                            completionIndex = actualData.findIndex(d => d === 0);
+                            if(completionIndex !== -1) {
+                                pointStyles[completionIndex] = trophyIcon;
+                            }
+                        }
+
+                        burnDownChart = new Chart('burnDownChart', {
+                            type: 'line',
+                            data: {
+                                labels: labels,
+                                datasets: [
+                                    {
+                                        label: 'Idealno preostalo',
+                                        data: idealData,
+                                        borderColor: '#94a3b8', // slate-400
+                                        borderDash: [5, 5],
+                                        fill: false,
+                                        tension: 0.1
+                                    },
+                                    {
+                                        label: 'Stvarno preostalo',
+                                        data: actualData,
+                                        borderColor: '#4f46e5', // indigo-600
+                                        backgroundColor: 'rgba(79, 70, 229, 0.1)',
+                                        fill: true,
+                                        tension: 0.1,
+                                        pointStyle: pointStyles,
+                                        pointRadius: (context) => (completionIndex !== -1 && context.dataIndex === completionIndex) ? 12 : 3,
+                                    }
+                                ]
+                            },
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                scales: {
+                                    y: {
+                                        beginAtZero: true,
+                                        title: {
+                                            display: true,
+                                            text: 'Broj preostalih zadataka'
+                                        }
+                                    }
+                                },
+                                plugins: {
+                                    legend: {
+                                        position: 'bottom'
+                                    }
+                                }
+                            }
+                        });
+                    }
+                }
             };
 
 
             const handleTaskFormSubmit = (e) => {
                 e.preventDefault();
                 const id = document.getElementById('taskId').value;
-                let projectToUpdate = getCurrentProject();
+                const projectId = document.getElementById('taskProjectId').value || getCurrentProject().id;
+                let projectToUpdate = data.projects.find(p => p.id == projectId);
 
                  const subtaskNodes = document.querySelectorAll('#subtaskList .subtask-item');
                 const subtasks = Array.from(subtaskNodes).map(node => ({
@@ -1449,6 +1773,12 @@
                     completed: node.querySelector('input[type="checkbox"]').checked
                 }));
 
+                const taskDependenciesSelect = document.getElementById('taskDependencies');
+                const dependencies = Array.from(taskDependenciesSelect.selectedOptions).map(opt => parseInt(opt.value));
+
+                const tagPills = document.querySelectorAll('#tag-pills-container .tag-pill');
+                const tags = Array.from(tagPills).map(pill => pill.dataset.tag);
+
                 const taskData = {
                     title: document.getElementById('taskTitle').value.trim(),
                     description: document.getElementById('taskDescription').value.trim(),
@@ -1456,7 +1786,9 @@
                     startDate: document.getElementById('taskStartDate').value,
                     endDate: document.getElementById('taskEndDate').value,
                     priority: document.getElementById('taskPriority').value,
-                    subtasks: subtasks
+                    subtasks: subtasks,
+                    dependencies: dependencies,
+                    tags: tags
                 };
 
                  if(!taskData.title || !taskData.assignee || !taskData.startDate || !taskData.endDate) {
@@ -1465,7 +1797,6 @@
                 }
 
                 if (id) { // Uređivanje
-                    const oldTask = projectToUpdate.tasks.find(task => task.id == id);
                     logActivity(`${taskData.assignee} je ažurirao/la zadatak "${taskData.title}".`);
                     projectToUpdate.tasks = projectToUpdate.tasks.map(task => task.id == id ? { ...task, ...taskData } : task);
 
@@ -1488,6 +1819,66 @@
                 closeModal(taskModal, taskModalContent);
             };
             
+            // --- Funkcije za oznake (Tags) ---
+            const renderTagPills = (tags = []) => {
+                const container = document.getElementById('tag-pills-container');
+                container.innerHTML = '';
+                tags.forEach(tag => {
+                    const pill = document.createElement('div');
+                    pill.className = 'tag-pill';
+                    pill.dataset.tag = tag;
+                    pill.innerHTML = `
+                        <span>${tag}</span>
+                        <button type="button" class="remove-tag text-indigo-400 hover:text-indigo-600"><i class="fas fa-times-circle fa-xs"></i></button>
+                    `;
+                    container.appendChild(pill);
+                });
+            };
+             
+            const addTag = (tag) => {
+                if (tag) {
+                    const formattedTag = '#' + tag.replace(/[^a-zA-Z0-9]/g, '');
+                    const container = document.getElementById('tag-pills-container');
+                    const existingTags = Array.from(container.querySelectorAll('.tag-pill')).map(p => p.dataset.tag);
+                    if (!existingTags.includes(formattedTag)) {
+                        renderTagPills([...existingTags, formattedTag]);
+                    }
+                }
+            };
+            
+            const renderTagFilter = () => {
+                const project = getCurrentProject();
+                if (!project || !project.tasks) {
+                    tagFilterContainer.innerHTML = '';
+                    return;
+                }
+
+                const allTags = new Set();
+                project.tasks.forEach(task => {
+                    if (task.tags) {
+                        task.tags.forEach(tag => allTags.add(tag));
+                    }
+                });
+
+                if (allTags.size > 0) {
+                    const options = Array.from(allTags).sort().map(tag => `<option value="${tag}">${tag}</option>`).join('');
+                    tagFilterContainer.innerHTML = `
+                        <select id="tagFilter" class="block w-full pl-3 pr-8 py-2 bg-white border border-slate-300 rounded-md shadow-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+                            <option value="">Sve oznake</option>
+                            ${options}
+                        </select>
+                    `;
+                    const select = document.getElementById('tagFilter');
+                    select.value = activeTagFilter || "";
+                    select.addEventListener('change', (e) => {
+                        activeTagFilter = e.target.value || null;
+                        renderCurrentView();
+                    });
+                } else {
+                    tagFilterContainer.innerHTML = '';
+                }
+            };
+
             // --- Event listeneri ---
             projectSelector.addEventListener('change', handleProjectChange);
             newProjectBtn.addEventListener('click', () => openProjectModal(true));
@@ -1563,16 +1954,29 @@
                 }
             });
 
+            // Tag input listener
+            const tagInput = document.getElementById('taskTagsInput');
+            tagInput.addEventListener('keydown', (e) => {
+                if (e.key === ',' || e.key === ' ' || e.key === 'Enter') {
+                    e.preventDefault();
+                    addTag(tagInput.value);
+                    tagInput.value = '';
+                }
+            });
 
-            // Dashboard stat cards click
-            document.getElementById('stat-card-todo').addEventListener('click', () => switchView('kanban'));
-            document.getElementById('stat-card-inprogress').addEventListener('click', () => switchView('kanban'));
-            document.getElementById('stat-card-done').addEventListener('click', () => switchView('kanban'));
+            document.getElementById('tag-pills-container').addEventListener('click', (e) => {
+                const removeBtn = e.target.closest('.remove-tag');
+                if(removeBtn) {
+                    removeBtn.closest('.tag-pill').remove();
+                }
+            });
+
+
+            // Dashboard stat cards click - MOVED TO renderDashboard function
 
             // Delegacija događaja
             viewsContainer.addEventListener('click', (e) => {
                 const project = getCurrentProject();
-                if (!project) return;
                 
                 const findTask = (id) => (project.tasks || []).find(t => t.id == id);
                 const findTaskFromCalendar = (taskId, projectId) => {
@@ -1595,6 +1999,8 @@
                 const taskTitleLink = e.target.closest('.task-title-link');
                 const deadlineTaskItem = e.target.closest('.deadline-task-item');
                 const workloadTaskItem = e.target.closest('.workload-task-item');
+                const roadmapBar = e.target.closest('.roadmap-bar-wrapper');
+
 
                 if (editBtn) {
                     const task = findTask(editBtn.dataset.id);
@@ -1675,6 +2081,13 @@
                     const projectId = workloadTaskItem.dataset.projectId;
                     const task = findTaskByProjectAndId(projectId, taskId);
                     if (task) openTaskModal(task);
+                } else if (roadmapBar) {
+                    const projectId = roadmapBar.dataset.projectId;
+                    if(projectId) {
+                        projectSelector.value = projectId;
+                        handleProjectChange({target: {value: projectId}});
+                        switchView('gantt');
+                    }
                 }
             });
 
