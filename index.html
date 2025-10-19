@@ -66,15 +66,18 @@
         #roadmap-timeline::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
 
         /* Frappe Gantt Customizations */
-        #gantt-chart .gantt .bar-wrapper.progress-100 .bar,
-        #gantt-chart .gantt .bar.progress-100,
-        #gantt-chart .gantt .bar-progress.progress-100 { fill: #10b981 !important; } /* Emerald-500 */
-        #gantt-chart .gantt .bar-wrapper.progress-50 .bar,
-        #gantt-chart .gantt .bar.progress-50,
-        #gantt-chart .gantt .bar-progress.progress-50 { fill: #f59e0b !important; } /* Amber-500 */
-        #gantt-chart .gantt .bar-wrapper.progress-0 .bar,
-        #gantt-chart .gantt .bar.progress-0,
-        #gantt-chart .gantt .bar-progress.progress-0 { fill: #64748b !important; } /* Slate-500 */
+        /* Status: Gotovo (Done) */
+        #gantt-chart .gantt .bar-wrapper.gantt-status-done .bar { fill: #a7f3d0 !important; } /* emerald-200 */
+        #gantt-chart .gantt .bar-wrapper.gantt-status-done .bar-progress { fill: #10b981 !important; } /* emerald-500 */
+        
+        /* Status: U izradi (In Progress) */
+        #gantt-chart .gantt .bar-wrapper.gantt-status-inprogress .bar { fill: #c7d2fe !important; } /* indigo-200 */
+        #gantt-chart .gantt .bar-wrapper.gantt-status-inprogress .bar-progress { fill: #6366f1 !important; } /* indigo-500 */
+
+        /* Status: Za obaviti (To Do) */
+        #gantt-chart .gantt .bar-wrapper.gantt-status-todo .bar { fill: #e2e8f0 !important; } /* slate-200 */
+        #gantt-chart .gantt .bar-wrapper.gantt-status-todo .bar-progress { fill: #94a3b8 !important; } /* slate-400 */
+
         #gantt-chart .gantt .bar-label { font-size: 13px; font-weight: 500; fill: #ffffff; }
         #gantt-chart .grid-header { fill: #f8fafc; }
         #gantt-chart .grid-row:nth-child(odd) { fill: #f1f5f9; }
@@ -614,7 +617,7 @@
                 return null;
             };
 
-            const logActivity = (message) => {
+            const logActivity = (message, details = {}) => {
                 const project = getCurrentProject();
                 if (!project) return;
                 if (!project.activityLog) {
@@ -622,9 +625,28 @@
                 }
                 project.activityLog.push({
                     message: message,
-                    timestamp: new Date().toISOString()
+                    timestamp: new Date().toISOString(),
+                    ...details
                 });
                 saveData();
+            };
+            
+            // --- Funkcija za sortiranje zadataka ---
+            const sortTasks = (tasks) => {
+                const priorityValues = { high: 3, medium: 2, low: 1 };
+                return [...tasks].sort((a, b) => {
+                    // Sortiraj po prioritetu silazno (visok -> nizak)
+                    const priorityA = priorityValues[a.priority] || 0;
+                    const priorityB = priorityValues[b.priority] || 0;
+                    if (priorityA !== priorityB) {
+                        return priorityB - priorityA;
+                    }
+
+                    // Ako je prioritet isti, sortiraj po datumu završetka uzlazno (ranije -> kasnije)
+                    const dateA = new Date(a.endDate);
+                    const dateB = new Date(b.endDate);
+                    return dateA - dateB;
+                });
             };
 
             // --- Funkcije za prikaz ---
@@ -956,10 +978,22 @@
                 const tasks = activeTagFilter ? (project.tasks || []).filter(t => t.tags && t.tags.includes(activeTagFilter)) : (project.tasks || []);
                 
                 kanbanColumns.forEach(col => col.innerHTML = '');
-                tasks.forEach(task => {
-                    const card = createTaskCard(task);
-                    const column = document.querySelector(`.kanban-column-body[data-status="${task.status}"]`);
-                    if(column) column.appendChild(card);
+
+                const tasksByStatus = tasks.reduce((acc, task) => {
+                    acc[task.status] = acc[task.status] || [];
+                    acc[task.status].push(task);
+                    return acc;
+                }, { todo: [], inprogress: [], done: [] });
+
+                Object.keys(tasksByStatus).forEach(status => {
+                    const sortedTasks = sortTasks(tasksByStatus[status]);
+                    const column = document.querySelector(`.kanban-column-body[data-status="${status}"]`);
+                    if (column) {
+                        sortedTasks.forEach(task => {
+                            const card = createTaskCard(task);
+                            column.appendChild(card);
+                        });
+                    }
                 });
             };
             
@@ -983,8 +1017,11 @@
                 ];
 
                 categories.forEach(category => {
-                    const tasksInCategory = tasks.filter(t => t.status === category.status);
+                    let tasksInCategory = tasks.filter(t => t.status === category.status);
                     if (tasksInCategory.length === 0 && activeTagFilter) return; // Hide empty categories when filtering
+                    
+                    tasksInCategory = sortTasks(tasksInCategory);
+
                     const isCollapsed = listCategoryState[category.status] || false;
 
                     const categoryWrapper = document.createElement('div');
@@ -1012,7 +1049,6 @@
                                 <tr>
                                     <th scope="col" class="px-2 py-3 w-12">Status</th>
                                     <th scope="col" class="px-4 py-3">Naziv</th>
-                                    <th scope="col" class="px-4 py-3">Oznake</th>
                                     <th scope="col" class="px-4 py-3">Zadužen</th>
                                     <th scope="col" class="px-4 py-3">Rok</th>
                                     <th scope="col" class="px-4 py-3">Prioritet</th>
@@ -1021,7 +1057,7 @@
                             </thead>
                             <tbody>`;
 
-                        const tableRows = tasksInCategory.sort((a,b) => new Date(a.endDate) - new Date(b.endDate)).map(task => {
+                        const tableRows = tasksInCategory.map(task => {
                             const priorities = {
                                 high: { label: 'Visok', text: 'text-red-800', bg: 'bg-red-100' },
                                 medium: { label: 'Srednji', text: 'text-amber-800', bg: 'bg-amber-100' },
@@ -1187,8 +1223,16 @@
                 }
                 const ganttTasks = tasks.map(task => {
                     let progress = 0;
-                    if (task.status === 'done') progress = 100;
-                    else if (task.status === 'inprogress') progress = 50;
+                    // Izračunaj napredak na temelju podzadataka ako postoje
+                    if (task.subtasks && task.subtasks.length > 0) {
+                        const completedSubtasks = task.subtasks.filter(st => st.completed).length;
+                        progress = (completedSubtasks / task.subtasks.length) * 100;
+                    } else if (task.status === 'done') {
+                        progress = 100;
+                    } else if (task.status === 'inprogress') {
+                        progress = 50; // Zadani napredak za zadatke "u izradi" bez podzadataka
+                    }
+
                     return {
                         id: String(task.id),
                         name: task.title,
@@ -1197,7 +1241,7 @@
                         progress: progress,
                         assignee: task.assignee,
                         dependencies: (task.dependencies || []).join(','),
-                        custom_class: `progress-${progress}`,
+                        custom_class: `gantt-status-${task.status}`, // Klasa temeljena na statusu
                         status: task.status
                     };
                 });
@@ -1657,104 +1701,107 @@
                         projectStartDate.setHours(0,0,0,0);
                         projectEndDate.setHours(0,0,0,0);
 
-                        let labels = [];
-                        let idealData = [];
-                        let actualData = [];
-                        const totalTasks = tasks.length;
                         const durationDays = Math.ceil((projectEndDate - projectStartDate) / (1000 * 60 * 60 * 24)) + 1;
-                        const idealBurnPerDay = durationDays > 1 ? totalTasks / (durationDays - 1) : totalTasks;
-                        
-                        const completionsByDate = {};
-                        if (project.activityLog) {
-                            project.activityLog
-                                .filter(entry => entry.message.includes('u "Gotovo"'))
-                                .forEach(entry => {
-                                    const d = new Date(entry.timestamp);
-                                    d.setHours(0, 0, 0, 0);
-                                    const dateString = d.toISOString().split('T')[0];
-                                    completionsByDate[dateString] = (completionsByDate[dateString] || 0) + 1;
-                                });
-                        }
+                        if (durationDays <= 0 || !project.activityLog) {
+                            burnDownCanvas.parentElement.innerHTML = '<p class="text-center text-slate-500 p-8">Nema dovoljno podataka za burn-down grafikon.</p>';
+                        } else {
+                            const dailyDeltas = new Array(durationDays).fill(0);
+                            const dayOne = new Date(projectStartDate);
+                            dayOne.setHours(0,0,0,0);
 
-                        let remainingTasks = totalTasks;
-                        const today = new Date();
-                        today.setHours(0,0,0,0);
+                            // Process activity log to get daily changes in completed tasks
+                            project.activityLog.forEach(entry => {
+                                if (entry.newStatus) { // It's a status change event
+                                    const entryDate = new Date(entry.timestamp);
+                                    entryDate.setHours(0,0,0,0);
+                                    
+                                    const dayIndex = Math.floor((entryDate - dayOne) / (1000 * 60 * 60 * 24));
 
-                        for (let i = 0; i < durationDays; i++) {
-                            const currentDate = new Date(projectStartDate);
-                            currentDate.setDate(projectStartDate.getDate() + i);
-                            const dateString = currentDate.toISOString().split('T')[0];
-                            
-                            labels.push(currentDate.toLocaleDateString('hr-HR', { day: 'numeric', month: 'short' }));
-                            idealData.push(Math.round(Math.max(0, totalTasks - (i * idealBurnPerDay))));
-                            
-                            if (currentDate <= today) {
-                                if (completionsByDate[dateString]) {
-                                    remainingTasks -= completionsByDate[dateString];
-                                }
-                                actualData.push(remainingTasks);
-                            }
-                        }
+                                    if (dayIndex >= 0 && dayIndex < durationDays) {
+                                        const isCompletion = entry.newStatus === 'done';
+                                        const wasCompleted = entry.oldStatus === 'done';
 
-                        const isProjectComplete = totalTasks > 0 && remainingTasks === 0 && actualData.length > 0;
-
-                        // Icon for completed project
-                        const trophyIcon = new Image(20, 20);
-                        trophyIcon.src = 'data:image/svg+xml;base64,' + btoa('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512" fill="#f59e0b"><path d="M552 64H448V48C448 21.5 426.5 0 400 0H176c-26.5 0-48 21.5-48 48v16H24C10.7 64 0 74.7 0 88v32c0 13.3 10.7 24 24 24h13.2L65 481.3c2.4 21.3 20.3 37.4 41.8 38.6C129.5 523.5 160 493.1 160 456c0-11.8-3.1-22.7-8.6-32H128c-17.7 0-32-14.3-32-32s14.3-32 32-32h32.6c2.8-14.8 8.8-28.1 16.9-39.4C180.3 320 188.5 320 192 320h192c3.5 0 11.7 0 14.6 1.4c8.1 11.4 14.1 24.6 16.9 39.4H448c17.7 0 32 14.3 32 32s-14.3 32-32 32h-31.4c-5.5 9.3-8.6 20.2-8.6 32c0 37.1 30.5 67.5 52.8 71.9c21.5 1.2 39.4-14.7 41.8-38.6L538.8 144H552c13.3 0 24-10.7 24-24V88c0-13.3-10.7-24-24-24zM192 64h192v64H192V64z"/></svg>');
-                        
-                        let pointStyles = new Array(actualData.length).fill('circle');
-                        let completionIndex = -1;
-                        if (isProjectComplete) {
-                            completionIndex = actualData.findIndex(d => d === 0);
-                            if(completionIndex !== -1) {
-                                pointStyles[completionIndex] = trophyIcon;
-                            }
-                        }
-
-                        burnDownChart = new Chart('burnDownChart', {
-                            type: 'line',
-                            data: {
-                                labels: labels,
-                                datasets: [
-                                    {
-                                        label: 'Idealno preostalo',
-                                        data: idealData,
-                                        borderColor: '#94a3b8', // slate-400
-                                        borderDash: [5, 5],
-                                        fill: false,
-                                        tension: 0.1
-                                    },
-                                    {
-                                        label: 'Stvarno preostalo',
-                                        data: actualData,
-                                        borderColor: '#4f46e5', // indigo-600
-                                        backgroundColor: 'rgba(79, 70, 229, 0.1)',
-                                        fill: true,
-                                        tension: 0.1,
-                                        pointStyle: pointStyles,
-                                        pointRadius: (context) => (completionIndex !== -1 && context.dataIndex === completionIndex) ? 12 : 3,
-                                    }
-                                ]
-                            },
-                            options: {
-                                responsive: true,
-                                maintainAspectRatio: false,
-                                scales: {
-                                    y: {
-                                        beginAtZero: true,
-                                        title: {
-                                            display: true,
-                                            text: 'Broj preostalih zadataka'
+                                        if (isCompletion && !wasCompleted) {
+                                            dailyDeltas[dayIndex]--; // One task completed
+                                        } else if (!isCompletion && wasCompleted) {
+                                            dailyDeltas[dayIndex]++; // One task "un-completed"
                                         }
                                     }
-                                },
-                                plugins: {
-                                    legend: {
-                                        position: 'bottom'
+                                }
+                            });
+
+                            let labels = [];
+                            let idealData = [];
+                            let actualData = [];
+                            let remainingTasks = totalTasks;
+                            const idealBurnPerDay = durationDays > 1 ? totalTasks / (durationDays - 1) : totalTasks;
+                            const today = new Date();
+                            today.setHours(0,0,0,0);
+
+                            for (let i = 0; i < durationDays; i++) {
+                                const currentDate = new Date(projectStartDate);
+                                currentDate.setDate(projectStartDate.getDate() + i);
+                                
+                                labels.push(currentDate.toLocaleDateString('hr-HR', { day: 'numeric', month: 'short' }));
+                                idealData.push(Math.round(Math.max(0, totalTasks - (i * idealBurnPerDay))));
+                                
+                                if (currentDate <= today) {
+                                     if(i > 0) {
+                                        remainingTasks = actualData[actualData.length - 1] + (dailyDeltas[i] || 0)
+                                    } else {
+                                        // On day 0, just apply the delta for day 0
+                                        remainingTasks = totalTasks + (dailyDeltas[i] || 0)
                                     }
+                                    actualData.push(remainingTasks);
                                 }
                             }
-                        });
+                        
+                            const isProjectComplete = remainingTasks <= 0 && actualData.length > 0;
+                            const trophyIcon = new Image(20, 20);
+                            trophyIcon.src = 'data:image/svg+xml;base64,' + btoa('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512" fill="#f59e0b"><path d="M552 64H448V48C448 21.5 426.5 0 400 0H176c-26.5 0-48 21.5-48 48v16H24C10.7 64 0 74.7 0 88v32c0 13.3 10.7 24 24 24h13.2L65 481.3c2.4 21.3 20.3 37.4 41.8 38.6C129.5 523.5 160 493.1 160 456c0-11.8-3.1-22.7-8.6-32H128c-17.7 0-32-14.3-32-32s14.3-32 32-32h32.6c2.8-14.8 8.8-28.1 16.9-39.4C180.3 320 188.5 320 192 320h192c3.5 0 11.7 0 14.6 1.4c8.1 11.4 14.1 24.6 16.9 39.4H448c17.7 0 32 14.3 32 32s-14.3 32-32 32h-31.4c-5.5 9.3-8.6 20.2-8.6 32c0 37.1 30.5 67.5 52.8 71.9c21.5 1.2 39.4-14.7 41.8-38.6L538.8 144H552c13.3 0 24-10.7 24-24V88c0-13.3-10.7-24-24-24zM192 64h192v64H192V64z"/></svg>');
+                            
+                            let pointStyles = new Array(actualData.length).fill('circle');
+                            let completionIndex = -1;
+                            if (isProjectComplete) {
+                                completionIndex = actualData.findIndex(d => d <= 0);
+                                if(completionIndex !== -1) {
+                                    pointStyles[completionIndex] = trophyIcon;
+                                }
+                            }
+
+                            burnDownChart = new Chart('burnDownChart', {
+                                type: 'line',
+                                data: {
+                                    labels: labels,
+                                    datasets: [
+                                        {
+                                            label: 'Idealno preostalo',
+                                            data: idealData,
+                                            borderColor: '#94a3b8',
+                                            borderDash: [5, 5],
+                                            fill: false,
+                                            tension: 0.1
+                                        },
+                                        {
+                                            label: 'Stvarno preostalo',
+                                            data: actualData,
+                                            borderColor: '#4f46e5',
+                                            backgroundColor: 'rgba(79, 70, 229, 0.1)',
+                                            fill: true,
+                                            tension: 0.1,
+                                            pointStyle: pointStyles,
+                                            pointRadius: (context) => (completionIndex !== -1 && context.dataIndex === completionIndex) ? 12 : 3,
+                                        }
+                                    ]
+                                },
+                                options: {
+                                    responsive: true,
+                                    maintainAspectRatio: false,
+                                    scales: { y: { beginAtZero: true, title: { display: true, text: 'Broj preostalih zadataka' } } },
+                                    plugins: { legend: { position: 'bottom' } }
+                                }
+                            });
+                        }
                     }
                 }
             };
@@ -1797,11 +1844,10 @@
                 }
 
                 if (id) { // Uređivanje
-                    logActivity(`${taskData.assignee} je ažurirao/la zadatak "${taskData.title}".`);
+                    logActivity(`${taskData.assignee} je ažurirao/la zadatak "${taskData.title}".`, { taskId: parseInt(id) });
                     projectToUpdate.tasks = projectToUpdate.tasks.map(task => task.id == id ? { ...task, ...taskData } : task);
 
                 } else { // Dodavanje
-                    logActivity(`${taskData.assignee} je kreirao/la zadatak "${taskData.title}".`);
                     const newId = (projectToUpdate.tasks && projectToUpdate.tasks.length > 0) ? Math.max(...projectToUpdate.tasks.map(t => t.id)) + 1 : 1;
                     const preset = document.getElementById('taskStatusPreset').value;
                     const status = ['todo', 'inprogress', 'done'].includes(preset) ? preset : 'todo';
@@ -1812,7 +1858,9 @@
                          projectToUpdate = data.projects.find(p => p.id == targetProjectId) || projectToUpdate;
                     }
                     if(!projectToUpdate.tasks) projectToUpdate.tasks = [];
+                    
                     projectToUpdate.tasks.push({ ...taskData, id: newId, status });
+                    logActivity(`${taskData.assignee} je kreirao/la zadatak "${taskData.title}".`, { taskId: newId, newStatus: status });
                 }
                 saveData();
                 renderCurrentView();
@@ -1977,6 +2025,7 @@
             // Delegacija događaja
             viewsContainer.addEventListener('click', (e) => {
                 const project = getCurrentProject();
+                if (!project) return;
                 
                 const findTask = (id) => (project.tasks || []).find(t => t.id == id);
                 const findTaskFromCalendar = (taskId, projectId) => {
@@ -2008,7 +2057,7 @@
                 } else if (deleteBtn) {
                     const task = findTask(deleteBtn.dataset.id);
                     if (task) showConfirmModal('Obriši zadatak', `Želite li obrisati zadatak "<b>${task.title}</b>"?`, () => {
-                        logActivity(`${task.assignee} je obrisao/la zadatak "${task.title}".`);
+                        logActivity(`${task.assignee} je obrisao/la zadatak "${task.title}".`, { taskId: task.id });
                         project.tasks = project.tasks.filter(t => t.id != task.id);
                         saveData(); renderCurrentView();
                     });
@@ -2022,9 +2071,12 @@
                     const task = findTask(moveTaskBtn.dataset.id);
                     if (task) {
                         const newStatus = moveTaskBtn.dataset.newStatus;
-                        logActivity(`${task.assignee} je pomaknuo/la zadatak "${task.title}" u "${statusLabels[newStatus]}".`);
-                        task.status = newStatus;
-                        saveData(); renderCurrentView();
+                        const oldStatus = task.status;
+                        if (oldStatus !== newStatus) {
+                            task.status = newStatus;
+                            logActivity(`${task.assignee} je pomaknuo/la zadatak "${task.title}" u "${statusLabels[newStatus]}".`, { taskId: task.id, oldStatus: oldStatus, newStatus: newStatus });
+                            renderCurrentView();
+                        }
                     }
                 } else if (columnAddBtn) {
                     const status = columnAddBtn.getAttribute('data-status');
@@ -2064,10 +2116,12 @@
                     const task = findTask(listMoveTaskBtn.dataset.id);
                     if (task) {
                         const newStatus = listMoveTaskBtn.dataset.newStatus;
-                        logActivity(`${task.assignee} je pomaknuo/la zadatak "${task.title}" u "${statusLabels[newStatus]}".`);
-                        task.status = newStatus;
-                        saveData();
-                        renderCurrentView();
+                        const oldStatus = task.status;
+                         if (oldStatus !== newStatus) {
+                            task.status = newStatus;
+                            logActivity(`${task.assignee} je pomaknuo/la zadatak "${task.title}" u "${statusLabels[newStatus]}".`, { taskId: task.id, oldStatus: oldStatus, newStatus: newStatus });
+                            renderCurrentView();
+                        }
                     }
                 } else if (taskTitleLink) {
                     e.preventDefault();
@@ -2129,9 +2183,10 @@
                     const project = getCurrentProject();
                     const task = project.tasks.find(t => t.id == taskId);
                     if (task && task.status !== newStatus) {
-                         logActivity(`${task.assignee} je pomaknuo/la zadatak "${task.title}" u "${statusLabels[newStatus]}".`);
+                        const oldStatus = task.status;
                         task.status = newStatus;
-                        saveData(); renderCurrentView();
+                        logActivity(`${task.assignee} je pomaknuo/la zadatak "${task.title}" u "${statusLabels[newStatus]}".`, { taskId: task.id, oldStatus: oldStatus, newStatus: newStatus });
+                        renderCurrentView();
                     }
                 });
             });
