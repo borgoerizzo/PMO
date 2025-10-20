@@ -51,19 +51,23 @@
         .kanban-column-body::-webkit-scrollbar,
         #activity-log-container::-webkit-scrollbar,
         #global-search-results::-webkit-scrollbar,
-        #roadmap-timeline::-webkit-scrollbar { width: 6px; height: 6px; }
+        #roadmap-timeline::-webkit-scrollbar,
+        #task-comments-list::-webkit-scrollbar { width: 6px; height: 6px; }
         .kanban-column-body::-webkit-scrollbar-track,
         #activity-log-container::-webkit-scrollbar-track,
         #global-search-results::-webkit-scrollbar-track,
-        #roadmap-timeline::-webkit-scrollbar-track { background: transparent; }
+        #roadmap-timeline::-webkit-scrollbar-track,
+        #task-comments-list::-webkit-scrollbar-track { background: transparent; }
         .kanban-column-body::-webkit-scrollbar-thumb,
         #activity-log-container::-webkit-scrollbar-thumb,
         #global-search-results::-webkit-scrollbar-thumb,
-        #roadmap-timeline::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        #roadmap-timeline::-webkit-scrollbar-thumb,
+        #task-comments-list::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
         .kanban-column-body::-webkit-scrollbar-thumb:hover,
         #activity-log-container::-webkit-scrollbar-thumb:hover,
         #global-search-results::-webkit-scrollbar-thumb:hover,
-        #roadmap-timeline::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        #roadmap-timeline::-webkit-scrollbar-thumb:hover,
+        #task-comments-list::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
 
         /* Frappe Gantt Customizations */
         /* Status: Gotovo (Done) */
@@ -417,6 +421,15 @@
                             <!-- Options will be populated by JS -->
                         </select>
                     </div>
+                    <!-- Comments Section -->
+                    <div class="border-t pt-4">
+                        <label class="block text-sm font-medium text-slate-600 mb-2">Komentari</label>
+                        <div id="task-comments-list" class="space-y-3 mb-3 max-h-48 overflow-y-auto bg-slate-50 p-3 rounded-md border"></div>
+                        <div class="flex gap-2 mt-3">
+                            <input type="text" id="newCommentInput" placeholder="Napiši komentar..." class="flex-grow w-full px-3 py-2 bg-white border border-slate-300 rounded-md shadow-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+                            <button type="button" id="addCommentBtn" class="bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-indigo-700 transition">Pošalji</button>
+                        </div>
+                    </div>
                 </div>
                 <div class="flex justify-end space-x-4 mt-8">
                     <button type="button" class="cancel-btn-secondary bg-slate-100 text-slate-700 font-semibold py-2 px-4 rounded-lg hover:bg-slate-200 transition">Odustani</button>
@@ -494,6 +507,9 @@
         </div>
     </div>
 
+    <!-- Comment Tooltip -->
+    <div id="comment-tooltip" class="hidden absolute z-[100] max-w-xs p-3 text-sm font-normal text-white bg-slate-800 rounded-lg shadow-lg pointer-events-none"></div>
+
 
     <script>
         document.addEventListener('DOMContentLoaded', () => {
@@ -530,6 +546,7 @@
             const importDataBtn = document.getElementById('importDataBtn');
             const exportDataBtn = document.getElementById('exportDataBtn');
             const importFileInput = document.getElementById('importFileInput');
+            const commentTooltip = document.getElementById('comment-tooltip');
             let confirmCallback = null;
             const sidebar = document.getElementById('sidebar');
             const sidebarToggle = document.getElementById('sidebarToggle');
@@ -587,16 +604,16 @@
                 projects: [{ 
                     id: 1, name: 'Redizajn Web Stranice', 
                     tasks: [
-                        { id: 1, title: 'Analiza tržišta', description: 'Istražiti konkurenciju i ciljanu publiku.', assignee: 'Ana Anić', startDate: '2025-10-20', endDate: '2025-10-25', status: 'done', priority: 'high', subtasks: [], dependencies: [], tags: ["#analiza", "#istraživanje"] },
+                        { id: 1, title: 'Analiza tržišta', description: 'Istražiti konkurenciju i ciljanu publiku.', assignee: 'Ana Anić', startDate: '2025-10-20', endDate: '2025-10-25', status: 'done', priority: 'high', subtasks: [], dependencies: [], tags: ["#analiza", "#istraživanje"], comments: [ { text: 'Konkurencija koristi sličan pristup. Moramo biti inovativniji.', author: 'Ana Anić', timestamp: '2025-10-21T14:30:00.000Z' } ] },
                         { id: 2, title: 'Izrada wireframea', description: 'Definirati strukturu i layout stranice.', assignee: 'Ivan Ivić', startDate: '2025-10-22', endDate: '2025-10-28', status: 'inprogress', priority: 'medium', subtasks: [
                             {id: 1, text: 'Homepage wireframe', completed: true},
                             {id: 2, text: 'About Us wireframe', completed: false},
                             {id: 3, text: 'Contact page wireframe', completed: false}
-                        ], dependencies: [1], tags: ["#dizajn", "#UX"] },
-                        { id: 3, title: 'Dizajn korisničkog sučelja', description: 'Kreirati vizualni identitet i komponente.', assignee: 'Ana Anić', startDate: '2025-10-25', endDate: '2025-11-05', status: 'inprogress', priority: 'high', subtasks: [], dependencies: [2], tags: ["#dizajn", "#UI"] },
-                        { id: 4, title: 'Frontend razvoj', description: 'Implementirati dizajn u HTML/CSS/JS.', assignee: 'Marko Markić', startDate: '2025-11-01', endDate: '2025-11-15', status: 'todo', priority: 'high', subtasks: [], dependencies: [3], tags: ["#razvoj", "#frontend"] },
-                        { id: 5, title: 'Backend integracija', description: 'Povezati frontend s CMS-om.', assignee: 'Petra Petrić', startDate: '2025-11-10', endDate: '2025-11-25', status: 'todo', priority: 'medium', subtasks: [], dependencies: [4], tags: ["#razvoj", "#backend"]},
-                        { id: 6, title: 'Testiranje i ispravci', description: 'Osigurati funkcionalnost i responzivnost.', assignee: 'Ivan Ivić', startDate: '2025-11-26', endDate: '2025-11-30', status: 'todo', priority: 'low', subtasks: [], dependencies: [4, 5], tags: ["#testiranje", "#bug"] }
+                        ], dependencies: [1], tags: ["#dizajn", "#UX"], comments: [] },
+                        { id: 3, title: 'Dizajn korisničkog sučelja', description: 'Kreirati vizualni identitet i komponente.', assignee: 'Ana Anić', startDate: '2025-10-25', endDate: '2025-11-05', status: 'inprogress', priority: 'high', subtasks: [], dependencies: [2], tags: ["#dizajn", "#UI"], comments: [] },
+                        { id: 4, title: 'Frontend razvoj', description: 'Implementirati dizajn u HTML/CSS/JS.', assignee: 'Marko Markić', startDate: '2025-11-01', endDate: '2025-11-15', status: 'todo', priority: 'high', subtasks: [], dependencies: [3], tags: ["#razvoj", "#frontend"], comments: [] },
+                        { id: 5, title: 'Backend integracija', description: 'Povezati frontend s CMS-om.', assignee: 'Petra Petrić', startDate: '2025-11-10', endDate: '2025-11-25', status: 'todo', priority: 'medium', subtasks: [], dependencies: [4], tags: ["#razvoj", "#backend"], comments: []},
+                        { id: 6, title: 'Testiranje i ispravci', description: 'Osigurati funkcionalnost i responzivnost.', assignee: 'Ivan Ivić', startDate: '2025-11-26', endDate: '2025-11-30', status: 'todo', priority: 'low', subtasks: [], dependencies: [4, 5], tags: ["#testiranje", "#bug"], comments: [] }
                     ],
                     activityLog: []
                 }],
@@ -628,7 +645,7 @@
                     timestamp: new Date().toISOString(),
                     ...details
                 });
-                saveData();
+                // Do not save here, will be saved by the calling function
             };
             
             // --- Funkcija za sortiranje zadataka ---
@@ -717,6 +734,28 @@
                     subtaskList.appendChild(subtaskEl);
                 });
             };
+
+            const renderCommentsList = (comments = []) => {
+                const listEl = document.getElementById('task-comments-list');
+                if (!comments || comments.length === 0) {
+                    listEl.innerHTML = `<p class="text-sm text-slate-500 text-center py-4">Nema komentara.</p>`;
+                    return;
+                }
+                listEl.innerHTML = comments.map(comment => {
+                    const commentDate = new Date(comment.timestamp);
+                    const formattedDate = commentDate.toLocaleString('hr-HR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+                    return `
+                        <div class="text-sm">
+                            <div class="flex justify-between items-center mb-1">
+                                <span class="font-semibold text-slate-700">${comment.author}</span>
+                                <span class="text-xs text-slate-500">${formattedDate}</span>
+                            </div>
+                            <p class="text-slate-600 bg-white p-2 rounded-md border">${comment.text}</p>
+                        </div>
+                    `;
+                }).join('');
+                listEl.scrollTop = listEl.scrollHeight;
+            };
             
             const openTaskModal = (task = null, presetStatus = null) => {
                 taskForm.reset();
@@ -745,12 +784,14 @@
                     projectSelectWrapper.classList.add('hidden');
                     renderSubtaskList(task.subtasks);
                     renderTagPills(task.tags || []);
+                    renderCommentsList(task.comments);
                 } else {
                     modalTitle.textContent = 'Novi zadatak';
                     document.getElementById('taskId').value = '';
                     projectSelectWrapper.classList.add('hidden');
                     renderSubtaskList([]);
                     renderTagPills([]);
+                    renderCommentsList([]);
                 }
                 if (presetStatus) {
                     document.getElementById('taskStatusPreset').value = presetStatus;
@@ -785,6 +826,43 @@
                 confirmMessage.innerHTML = message;
                 confirmCallback = onConfirm;
                 openModal(confirmModal, confirmModalContent);
+            };
+            
+            // --- Tooltip za komentare ---
+            const showCommentTooltip = (e, task) => {
+                if (!task.comments || task.comments.length === 0) return;
+                
+                const latestComment = [...task.comments].pop();
+                const commentDate = new Date(latestComment.timestamp);
+                const formattedDate = commentDate.toLocaleString('hr-HR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+                commentTooltip.innerHTML = `
+                    <div class="font-semibold text-slate-300 mb-1 flex items-center"><i class="far fa-clock fa-xs mr-2"></i> ${formattedDate}</div>
+                    <div class="pl-5">${latestComment.text}</div>
+                `;
+
+                // Position tooltip
+                const tooltipRect = commentTooltip.getBoundingClientRect();
+                const viewportWidth = window.innerWidth;
+                const viewportHeight = window.innerHeight;
+
+                let left = e.pageX + 15;
+                let top = e.pageY + 15;
+
+                if (left + tooltipRect.width > viewportWidth) {
+                    left = e.pageX - tooltipRect.width - 15;
+                }
+                if (top + tooltipRect.height > viewportHeight) {
+                    top = e.pageY - tooltipRect.height - 15;
+                }
+
+                commentTooltip.style.left = `${left}px`;
+                commentTooltip.style.top = `${top}px`;
+                commentTooltip.classList.remove('hidden');
+            };
+
+            const hideCommentTooltip = () => {
+                commentTooltip.classList.add('hidden');
             };
 
             // --- Funkcije za projekte ---
@@ -868,6 +946,7 @@
                 const card = document.createElement('div');
                 card.setAttribute('draggable', 'true');
                 card.dataset.id = task.id;
+                card.dataset.hasComments = task.comments && task.comments.length > 0;
 
                 const priorities = {
                     high: { border: 'border-l-red-500', pill: 'bg-red-100 text-red-800', label: 'Visok' },
@@ -957,7 +1036,10 @@
                         </div>
                         <div class="flex items-center gap-2 text-xs">
                             ${deadlineHtml}
-                            <span class="text-slate-500 font-medium whitespace-nowrap flex items-center"><i class="far fa-calendar-check mr-1.5"></i>${task.endDate}</span>
+                             <span class="text-slate-500 font-medium whitespace-nowrap flex items-center">
+                                ${card.dataset.hasComments === 'true' ? '<i class="far fa-comment-dots mr-3" title="Sadrži komentar"></i>' : ''}
+                                <i class="far fa-calendar-check mr-1.5"></i>${task.endDate}
+                            </span>
                         </div>
                     </div>
                 `;
@@ -970,6 +1052,10 @@
                     if (e.target.closest('.status-menu-toggle') || e.target.closest('.status-menu')) return;
                     openTaskModal(task);
                 });
+                // Comment tooltip listeners
+                card.addEventListener('mouseenter', (e) => showCommentTooltip(e, task));
+                card.addEventListener('mouseleave', hideCommentTooltip);
+
                 return card;
             };
 
@@ -1085,7 +1171,7 @@
 
 
                             return `
-                                <tr class="bg-white border-b border-slate-200 hover:bg-slate-50">
+                                <tr class="bg-white border-b border-slate-200 hover:bg-slate-50" data-task-id="${task.id}">
                                     <td class="px-2 py-4 text-center relative">
                                         <button class="task-status-toggle ${statusIconInfo.color}" data-id="${task.id}" title="Promijeni status">
                                             <i class="fas ${statusIconInfo.icon} fa-lg"></i>
@@ -1100,7 +1186,11 @@
                                         </div>
                                     </td>
                                     <td class="px-4 py-4 font-medium text-slate-900">
-                                        <div><a href="#" class="task-title-link hover:underline" data-id="${task.id}">${task.title}</a> ${subtaskInfo}</div>
+                                        <div>
+                                            <a href="#" class="task-title-link hover:underline" data-id="${task.id}">${task.title}</a> 
+                                            ${task.comments && task.comments.length > 0 ? `<i class="far fa-comment-dots text-slate-400 ml-2" title="Sadrži komentar"></i>` : ''}
+                                            ${subtaskInfo}
+                                        </div>
                                         ${tagsInfo}
                                     </td>
                                     <td class="px-4 py-4">${task.assignee}</td>
@@ -1836,6 +1926,7 @@
                     subtasks: subtasks,
                     dependencies: dependencies,
                     tags: tags
+                    // Comments are handled separately
                 };
 
                  if(!taskData.title || !taskData.assignee || !taskData.startDate || !taskData.endDate) {
@@ -1859,7 +1950,7 @@
                     }
                     if(!projectToUpdate.tasks) projectToUpdate.tasks = [];
                     
-                    projectToUpdate.tasks.push({ ...taskData, id: newId, status });
+                    projectToUpdate.tasks.push({ ...taskData, id: newId, status, comments: [] }); // Add empty comments array for new task
                     logActivity(`${taskData.assignee} je kreirao/la zadatak "${taskData.title}".`, { taskId: newId, newStatus: status });
                 }
                 saveData();
@@ -2002,6 +2093,32 @@
                 }
             });
 
+            // Comment listeners
+            document.getElementById('addCommentBtn').addEventListener('click', () => {
+                const taskId = document.getElementById('taskId').value;
+                if (!taskId) return;
+
+                const project = getCurrentProject();
+                const task = project.tasks.find(t => t.id == taskId);
+                const input = document.getElementById('newCommentInput');
+                const text = input.value.trim();
+
+                if (task && text) {
+                    if (!task.comments) task.comments = [];
+                    task.comments.push({
+                        text: text,
+                        author: 'Ja', // Placeholder for current user
+                        timestamp: new Date().toISOString()
+                    });
+                    
+                    logActivity(`Komentar je dodan na zadatak "${task.title}".`);
+                    saveData();
+                    renderCommentsList(task.comments);
+                    renderCurrentView(); // Re-render to show comment icon
+                    input.value = '';
+                }
+            });
+
             // Tag input listener
             const tagInput = document.getElementById('taskTagsInput');
             tagInput.addEventListener('keydown', (e) => {
@@ -2019,10 +2136,7 @@
                 }
             });
 
-
-            // Dashboard stat cards click - MOVED TO renderDashboard function
-
-            // Delegacija događaja
+            // Delegacija događaja za klikove
             viewsContainer.addEventListener('click', (e) => {
                 const project = getCurrentProject();
                 if (!project) return;
@@ -2075,7 +2189,7 @@
                         if (oldStatus !== newStatus) {
                             task.status = newStatus;
                             logActivity(`${task.assignee} je pomaknuo/la zadatak "${task.title}" u "${statusLabels[newStatus]}".`, { taskId: task.id, oldStatus: oldStatus, newStatus: newStatus });
-                            renderCurrentView();
+                            saveData(); renderCurrentView();
                         }
                     }
                 } else if (columnAddBtn) {
@@ -2120,7 +2234,7 @@
                          if (oldStatus !== newStatus) {
                             task.status = newStatus;
                             logActivity(`${task.assignee} je pomaknuo/la zadatak "${task.title}" u "${statusLabels[newStatus]}".`, { taskId: task.id, oldStatus: oldStatus, newStatus: newStatus });
-                            renderCurrentView();
+                            saveData(); renderCurrentView();
                         }
                     }
                 } else if (taskTitleLink) {
@@ -2144,6 +2258,22 @@
                     }
                 }
             });
+            
+            // Comment tooltip delegation for List View
+            listView.addEventListener('mouseover', e => {
+                const taskRow = e.target.closest('tr[data-task-id]');
+                if (taskRow) {
+                    const project = getCurrentProject();
+                    const task = (project.tasks || []).find(t => t.id == taskRow.dataset.taskId);
+                    if (task) showCommentTooltip(e, task);
+                }
+            });
+            listView.addEventListener('mouseout', e => {
+                if (e.target.closest('tr[data-task-id]')) {
+                    hideCommentTooltip();
+                }
+            });
+
 
             document.body.addEventListener('click', (e) => {
                  if (!e.target.closest('#global-search-container')) {
@@ -2186,7 +2316,7 @@
                         const oldStatus = task.status;
                         task.status = newStatus;
                         logActivity(`${task.assignee} je pomaknuo/la zadatak "${task.title}" u "${statusLabels[newStatus]}".`, { taskId: task.id, oldStatus: oldStatus, newStatus: newStatus });
-                        renderCurrentView();
+                        saveData(); renderCurrentView();
                     }
                 });
             });
@@ -2310,4 +2440,3 @@
     </script>
 </body>
 </html>
-
