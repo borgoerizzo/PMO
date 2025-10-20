@@ -744,13 +744,25 @@
                 listEl.innerHTML = comments.map(comment => {
                     const commentDate = new Date(comment.timestamp);
                     const formattedDate = commentDate.toLocaleString('hr-HR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+                    const canEdit = comment.author === 'Ja';
+
                     return `
-                        <div class="text-sm">
+                        <div class="text-sm comment-item" data-comment-id="${comment.timestamp}">
                             <div class="flex justify-between items-center mb-1">
                                 <span class="font-semibold text-slate-700">${comment.author}</span>
-                                <span class="text-xs text-slate-500">${formattedDate}</span>
+                                <div class="flex items-center gap-3">
+                                    <span class="text-xs text-slate-500">${formattedDate}</span>
+                                    ${canEdit ? `
+                                    <div class="comment-actions">
+                                        <button class="edit-comment-btn text-slate-400 hover:text-indigo-600" title="Uredi"><i class="fas fa-pencil-alt fa-xs"></i></button>
+                                        <button class="delete-comment-btn text-slate-400 hover:text-red-600" title="Obriši"><i class="fas fa-trash-alt fa-xs"></i></button>
+                                    </div>
+                                    ` : ''}
+                                </div>
                             </div>
-                            <p class="text-slate-600 bg-white p-2 rounded-md border">${comment.text}</p>
+                            <div class="comment-content">
+                                <p class="text-slate-600 bg-white p-2 rounded-md border">${comment.text}</p>
+                            </div>
                         </div>
                     `;
                 }).join('');
@@ -2118,6 +2130,72 @@
                     input.value = '';
                 }
             });
+            
+            document.getElementById('task-comments-list').addEventListener('click', (e) => {
+                const taskId = document.getElementById('taskId').value;
+                if (!taskId) return;
+
+                const project = getCurrentProject();
+                const task = project.tasks.find(t => t.id == taskId);
+                if (!task) return;
+
+                const commentItem = e.target.closest('.comment-item');
+                if (!commentItem) return;
+                
+                const commentId = commentItem.dataset.commentId;
+                const comment = task.comments.find(c => c.timestamp === commentId);
+                
+                // Delete action
+                const deleteBtn = e.target.closest('.delete-comment-btn');
+                if (deleteBtn) {
+                    showConfirmModal('Obriši komentar', 'Jeste li sigurni da želite obrisati ovaj komentar?', () => {
+                        task.comments = task.comments.filter(c => c.timestamp !== commentId);
+                        logActivity(`Komentar je obrisan sa zadatka "${task.title}".`);
+                        saveData();
+                        renderCommentsList(task.comments);
+                        renderCurrentView(); // Update comment icon if needed
+                    });
+                    return;
+                }
+
+                // Edit action
+                const editBtn = e.target.closest('.edit-comment-btn');
+                if (editBtn) {
+                    const contentDiv = commentItem.querySelector('.comment-content');
+                    const currentText = comment.text;
+                    
+                    contentDiv.innerHTML = `
+                        <textarea class="w-full text-sm p-2 bg-white border border-indigo-500 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-indigo-500">${currentText}</textarea>
+                        <div class="flex justify-end gap-2 mt-2">
+                            <button type="button" class="cancel-edit-comment-btn text-xs bg-slate-100 text-slate-700 font-semibold py-1 px-3 rounded-lg hover:bg-slate-200">Odustani</button>
+                            <button type="button" class="save-comment-btn text-xs bg-indigo-600 text-white font-semibold py-1 px-3 rounded-lg hover:bg-indigo-700">Spremi</button>
+                        </div>
+                    `;
+                    commentItem.querySelector('.comment-actions').classList.add('hidden');
+                    return;
+                }
+
+                // Save edit action
+                const saveBtn = e.target.closest('.save-comment-btn');
+                if (saveBtn) {
+                    const newText = commentItem.querySelector('textarea').value.trim();
+                    if (newText && newText !== comment.text) {
+                        comment.text = newText;
+                        logActivity(`Komentar na zadatku "${task.title}" je uređen.`);
+                        saveData();
+                    }
+                    renderCommentsList(task.comments); // Re-render to show normal view
+                    return;
+                }
+
+                // Cancel edit action
+                const cancelBtn = e.target.closest('.cancel-edit-comment-btn');
+                if (cancelBtn) {
+                    renderCommentsList(task.comments); // Just re-render to cancel
+                    return;
+                }
+            });
+
 
             // Tag input listener
             const tagInput = document.getElementById('taskTagsInput');
@@ -2440,3 +2518,4 @@
     </script>
 </body>
 </html>
+
